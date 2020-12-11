@@ -174,7 +174,7 @@ component('stores', async function () {
   assert.is(queue, 0, 'no pending tests')
 
   function Main (state, emit) {
-    use(function (state, emitter) {
+    const res = use(function (state, emitter) {
       assert.is(initialState, state)
       state.store = 'test'
 
@@ -203,7 +203,11 @@ component('stores', async function () {
         assert.is(value, 'child', 'triggered by child emit')
         queue--
       })
+
+      return 'test'
     })
+
+    assert.is(res, 'test')
 
     return function (props) {
       emit('test', 'test')

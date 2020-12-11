@@ -23,9 +23,10 @@ const cache = new WeakMap()
  * }
  * @export
  * @param {function} fn A store function, will be called with state and emitter
+ * @returns {*}
  */
 export function use (fn) {
-  fn(current.state, current.emitter)
+  return fn(current.state, current.emitter)
 }
 
 /**
