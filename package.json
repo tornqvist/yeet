@@ -1,0 +1,31 @@
+{
+  "name": "swf",
+  "description": "Smol Web Framework",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "exports": {
+    "node": "./server.js",
+    "default": "./index.js"
+  },
+  "scripts": {
+    "test": "uvu test/server && node test/browser/run.js"
+  },
+  "files": [
+    "index.js",
+    "server.js"
+  ],
+  "private": true,
+  "author": "Carl Törnqvist <carl@tornqv.ist>",
+  "license": "MIT",
+  "directories": {
+    "test": "test"
+  },
+  "devDependencies": {
+    "@rollup/plugin-node-resolve": "^11.0.0",
+    "puppeteer": "^5.5.0",
+    "rollup": "^2.34.1",
+    "standard": "^16.0.3",
+    "uvu": "^0.5.1"
+  }
+}
