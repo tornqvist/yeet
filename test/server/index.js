@@ -1,6 +1,6 @@
 import { suite } from 'uvu'
 import * as assert from 'uvu/assert'
-import { html, Partial, Component, use, mount } from '../../server.js'
+import { html, Partial, Component, use, ref, mount } from '../../server.js'
 
 const api = suite('api')
 
@@ -81,6 +81,12 @@ render('spread attributes', async function () {
 render('bool props', async function () {
   const res = html`<input type="checkbox" required=${false} disabled=${true} data-hidden=${false}>`
   assert.is(await res.render(), '<input type="checkbox" disabled="disabled" data-hidden=false>')
+})
+
+render('ref', async function () {
+  const span = ref()
+  const res = html`<span ref=${span}>Hello world!</span>`
+  assert.is(await res.render(), '<span>Hello world!</span>')
 })
 
 const component = suite('component')

@@ -1,6 +1,7 @@
 import { Readable } from 'stream'
 
-const ATTRIBUTE = /<[a-z-]+[^>]*?\s+((\w+)=("|')?)?$/i // TODO: guard queries
+const REF_ATTR = /\s*ref=("|')?$/i
+const ATTRIBUTE = /<[a-z-]+[^>]*?\s+(([^\t\n\f "'>/=]+)=("|')?)?$/i // TODO: guard queries
 const BOOL_PROPS = [
   'async', 'autofocus', 'autoplay', 'checked', 'controls', 'default',
   'defaultchecked', 'defer', 'disabled', 'formnovalidate', 'hidden',
@@ -54,6 +55,15 @@ export function html (strings, ...values) {
 export function mount (partial, selector) {
   partial.selector = selector
   return partial
+}
+
+/**
+ * Create ref
+ * @export
+ * @returns {Ref}
+ */
+export function ref () {
+  return new Ref()
 }
 
 /**
@@ -149,10 +159,15 @@ export class Partial {
       }
 
       if (isAttr) {
-        if (typeof value === 'boolean' || value == null) {
+        if (value instanceof Ref) {
+          const match = REF_ATTR.exec(string)
+          console.assert(match, !match && `swf: Got ref as value for \`${string.match(ATTRIBUTE)?.[2]}\`, use instead \`ref=\${myRef}\`.`)
+          yield string.replace(match[0], '')
+          continue
+        } else if (typeof value === 'boolean' || value == null) {
           const [, attr, name, quote] = html.match(ATTRIBUTE)
           if (attr && BOOL_PROPS.includes(name)) {
-            console.assert(!quote, `swf: Boolean attribute \`${name}\` should not be quoted, use instead \`${name}=\${${JSON.stringify(value)}}\`.`)
+            console.assert(!quote, quote && `swf: Boolean attribute \`${name}\` should not be quoted, use instead \`${name}=\${${JSON.stringify(value)}}\`.`)
             if (!value) {
               // Drop falsy boolean attribute altogether
               yield string.slice(0, (attr.length + 1) * -1)
@@ -161,7 +176,7 @@ export class Partial {
             // Use name as value for truthy boolean values
             value = `"${name}"`
           }
-        } if (Array.isArray(value)) {
+        } else if (Array.isArray(value)) {
           value = await Promise.all(value.map(function (val) {
             return isObject(val) ? objToAttrs(val) : val
           }))
@@ -287,6 +302,12 @@ function isGenerator (obj) {
     typeof obj.next === 'function' &&
     typeof obj.throw === 'function'
 }
+
+/**
+ * Create a reference to a element node (available in Browser only)
+ * @class Ref
+ */
+class Ref {}
 
 /**
  * A basic event emitter implementation
