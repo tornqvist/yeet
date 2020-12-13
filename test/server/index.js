@@ -91,8 +91,60 @@ render('ref', async function () {
 
 const component = suite('component')
 
-component('can render', async function () {
-  const Main = Component(function * Main (state, emit) {
+component('extends partial', function () {
+  const MyComponent = Component(Function.prototype)
+  assert.type(MyComponent, 'function')
+  assert.instance(MyComponent(), Partial)
+})
+
+component('is iterable', async function () {
+  const MyComponent = Component(() => html`<div>Hello world!</div>`)
+  let string = ''
+  for await (const chunk of MyComponent()) {
+    string += chunk
+  }
+  assert.is(string, '<div>Hello world!</div>')
+})
+
+component('can render to promise', async function () {
+  const MyComponent = Component(() => html`<div>Hello world!</div>`)
+  const promise = MyComponent().render()
+  assert.instance(promise, Promise, 'is promise')
+  assert.is(await promise, '<div>Hello world!</div>')
+})
+
+component('can render to stream', async function () {
+  const MyComponent = Component(() => html`<div>Hello world!</div>`)
+  const stream = MyComponent().renderToStream()
+  const string = await new Promise(function (resolve, reject) {
+    let string = ''
+    stream.on('data', function (chunk) {
+      string += chunk
+    })
+    stream.on('end', function () {
+      resolve(string)
+    })
+    stream.on('end', reject)
+  })
+  assert.is(string, '<div>Hello world!</div>')
+})
+
+component('lifecycle', async function () {
+  const MyComponent = Component(Main)
+  const res = html`
+    <div>
+      ${MyComponent({ test: 'test' })}
+    </div>
+  `
+  assert.snapshot(dedent(await res.render()), dedent`
+    <div>
+      <span>
+        Hello world!
+      </span>
+    </div>
+  `)
+
+  function * Main (state, emit) {
     assert.type(state, 'object')
     assert.type(emit, 'function')
 
@@ -102,7 +154,7 @@ component('can render', async function () {
       yield function * () {
         yield html`
           <span>
-            Hello ${Component(Child, { test: 'fest' })}!
+            Hello world!
           </span>
         `
         assert.unreachable()
@@ -110,6 +162,16 @@ component('can render', async function () {
       assert.unreachable()
     }
     assert.unreachable()
+  }
+})
+
+component('can render nested component', async function () {
+  const Main = Component(function Main (state, emit) {
+    return html`
+      <span>
+        Hello ${Component(Child, { test: 'fest' })}!
+      </span>
+    `
   })
 
   const res = html`
@@ -135,33 +197,34 @@ component('can render', async function () {
   }
 })
 
-component('is provided initial state', async function () {
-  const initialState = { test: 'test' }
-  const res = html`<div>${Component(Main)}</div>`
-  assert.is(await res.render(initialState), '<div>Hello world!</div>')
+component('can mount', async function () {
+  const res = mount(Component(Main), 'body')
+  assert.is(res.selector, 'body')
+  assert.is(await res.render(), '<body>Hello world!</body>')
 
-  function * Main (state, emit) {
-    assert.is(state.test, 'test')
-    assert.is(state, initialState)
-    return 'Hello world!'
+  function Main (state, emit) {
+    return html`<body>Hello world!</body>`
   }
 })
 
 component('inherits state from parent', async function () {
   const initialState = { test: 'test' }
-  const res = html`<div>${Component(Main)}</div>`
+  const MainComponent = Component(Main)
+  const res = MainComponent()
   assert.is(await res.render(initialState), '<div>Hello world!</div>')
   assert.is(initialState.child, undefined)
 
   function Main (state, emit) {
-    return html`Hello ${[ChildA, ChildB].map(Component)}`
+    assert.is(initialState, state, 'state is root state')
+    return html`<div>Hello ${[ChildA, ChildB].map(Component)}</div>`
   }
 
   function ChildA (state, emit) {
     state.child = 'a'
-    assert.is(state.child, 'a')
-    assert.is(state.test, 'test')
-    assert.is.not(state, initialState)
+    assert.is.not(state, initialState, 'is not parent state')
+    assert.is(Object.getPrototypeOf(state), initialState, 'child innherit from parent')
+    assert.is(state.child, 'a', 'can modify local state')
+    assert.is(state.test, 'test', 'can read from parent state')
     return 'world'
   }
 
@@ -174,16 +237,13 @@ component('inherits state from parent', async function () {
 
 component('stores', async function () {
   let queue = 4
-  const initialState = {}
-  const res = html`<div>${Component(Main)}</div>`
-  assert.is(await res.render(initialState), '<div>Hello <span>world</span>!</div>')
-  assert.is(queue, 0, 'no pending tests')
+  const MainComponent = Component(Main)
+  const res = MainComponent()
+  assert.is(await res.render(), '<div>Hello <span>world</span>!</div>')
+  assert.is(queue, 0, 'all events triggered')
 
   function Main (state, emit) {
     const res = use(function (state, emitter) {
-      assert.is(initialState, state)
-      state.store = 'test'
-
       const events = ['test', 'child']
       emitter.on('*', function (event, value) {
         assert.is(event, value, 'event name match value')
@@ -217,14 +277,11 @@ component('stores', async function () {
 
     return function (props) {
       emit('test', 'test')
-      return html`Hello ${Component(Name)}!`
+      return html`<div>Hello ${Component(Name)}!</div>`
     }
   }
 
   function Name (state, emit) {
-    assert.not(initialState === state)
-    assert.is(Object.getPrototypeOf(state), initialState)
-
     return function () {
       emit('child', 'child')
       return html`<span>world</span>`

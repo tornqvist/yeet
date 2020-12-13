@@ -1,4 +1,4 @@
-import { Readable } from 'stream'
+import { Readable, PassThrough } from 'stream'
 
 const REF_ATTR = /\s*ref=("|')?$/i
 const ATTRIBUTE = /<[a-z-]+[^>]*?\s+(([^\t\n\f "'>/=]+)=("|')?)?$/i // TODO: guard queries
@@ -10,7 +10,6 @@ const BOOL_PROPS = [
 ]
 
 let current = null
-const known = new WeakSet()
 const cache = new WeakMap()
 
 /**
@@ -53,6 +52,7 @@ export function html (strings, ...values) {
  * @returns {Partial}
  */
 export function mount (partial, selector) {
+  if (typeof partial === 'function') partial = partial()
   partial.selector = selector
   return partial
 }
@@ -69,48 +69,14 @@ export function ref () {
 /**
  * Context for component
  * @class Context
- * @param {object} [state={}] Initial state
- * @param {object} [parent] Parent state
+ * @param {Object} [state={}] Initial state
  */
-function Context (state = {}, parent) {
+function Context (state = {}) {
+  const ctx = cache.get(state)
+  if (ctx) state = Object.create(state)
+  this.emitter = new Emitter(ctx?.emitter)
   this.state = state
-  this.emitter = new Emitter()
   cache.set(state, this)
-  if (cache.has(parent)) {
-    const ctx = cache.get(parent)
-    this.emitter.on('*', ctx.emitter.emit.bind(ctx.emitter))
-  }
-}
-
-/**
- * Create stateful component
- * @example
- * // Initialize when used
- * html`<div>${Component(Greeting, { name: 'world' })}</div>`
- * function Greeting (state, emit) {
- *   return (props) => html`<h1>Hello ${props.name}!</h1>`
- * }
- * @example
- * // Initialize when declaring
- * const Greeting = Component(function Greeting (state, emit) {
- *   return (props) => html`<h1>Hello ${props.name}!</h1>`
- * })
- * html`<div>${Greeting({ name: 'world' })}</div>`
- * @export
- * @class Component
- * @param {function} fn Component setup function
- * @param {...*} args Arguments to forward to component
- * @returns {(function|Component)}
- */
-export function Component (fn, ...args) {
-  if (!(this instanceof Component)) {
-    return function render () {
-      if (arguments.length) args = arguments
-      return new Component(fn, ...args)
-    }
-  }
-  this.fn = fn
-  this.args = args
 }
 
 /**
@@ -138,10 +104,6 @@ export class Partial {
 
   async * [Symbol.asyncIterator] (state = {}) {
     const { strings, values } = this
-
-    // An unrecognized state means we're at the root partial
-    const root = !known.has(state)
-    if (root) known.add(state)
 
     let html = ''
     for (let i = 0, len = strings.length; i < len; i++) {
@@ -195,49 +157,84 @@ export class Partial {
       yield string
 
       if (value != null) {
-        yield * resolve(value, state, root)
+        yield * resolve(value, state)
       }
     }
   }
 }
 
 /**
+ * Create stateful component, functions as proxy for partial
+ * @example
+ * // Initialize when used
+ * html`<div>${Component(HelloFunction, { name: 'world' })}</div>`
+ * @example
+ * // Initialize when declaring
+ * const Hello = Component(HelloFunction)
+ * html`<div>${Hello({ name: 'world' })}</div>`
+ * @export
+ * @param {function} fn Component setup function
+ * @param {...*} [args] Arguments to forward to component
+ * @return {(function|Component)}
+ */
+export function Component (fn, ...args) {
+  if (!(this instanceof Component)) {
+    return function render () {
+      if (arguments.length) args = arguments
+      return new Component(fn, ...args)
+    }
+  }
+  this.fn = fn
+  this.args = args
+}
+
+Component.prototype = Object.create(Partial.prototype)
+Component.prototype.constructor = Component
+Component.prototype.resolve = function (state = {}) {
+  const { fn, args } = this
+  const ctx = current = new Context(state)
+  const emit = ctx.emitter.emit.bind(ctx.emitter)
+  const component = fn(ctx.state, emit)
+  return unwind(component, ctx, args).catch(function (err) {
+    if (current === ctx) current = null
+    throw err
+  })
+}
+Component.prototype.render = async function (state = {}) {
+  const res = await this.resolve(state)
+  if (res instanceof Partial) return res.render(state)
+  return res
+}
+Component.prototype.renderToStream = function (state = {}) {
+  const stream = new PassThrough()
+  this.resolve(state).then(function (res) {
+    if (res instanceof Partial) res.renderToStream(state).pipe(stream)
+    else if (res) stream.write(res)
+    else stream.end()
+  })
+  return stream
+}
+Component.prototype[Symbol.asyncIterator] = async function * (state = {}) {
+  const res = await this.resolve(state)
+  if (res instanceof Partial) yield * res
+  else yield res
+}
+
+/**
  * Resolve a value to string
  * @param {*} value The value to resolve
- * @param {object} state Current state
- * @param {boolean} root Is this value in the root component
+ * @param {Object} state Current state
  * @returns {AsyncGenerator}
  */
-async function * resolve (value, parent, root) {
+async function * resolve (value, state) {
   if (Array.isArray(value)) {
-    for (const val of value) yield * resolve(val, parent, root)
+    for (const val of value) yield * resolve(val, state)
     return
   }
 
   if (typeof value === 'function') value = value()
-
-  // Resolve component
-  if (value instanceof Component) {
-    let state = parent
-    if (!root) {
-      // Spawn child state
-      state = Object.create(parent)
-      known.add(state)
-    }
-    const { fn, args } = value
-    const ctx = current = new Context(state, root ? null : parent)
-    const emit = ctx.emitter.emit.bind(ctx.emitter)
-    const component = fn(ctx.state, emit)
-    try {
-      value = await unwind(component, ctx, args)
-    } catch (err) {
-      if (current === ctx) current = null
-      throw err
-    }
-  }
-
   if (value instanceof Partial) {
-    yield * value[Symbol.asyncIterator](parent)
+    yield * value[Symbol.asyncIterator](state)
   } else {
     yield value
   }
@@ -245,7 +242,7 @@ async function * resolve (value, parent, root) {
 
 /**
  * Serialize an object to html attributes
- * @param {object} obj An object
+ * @param {Object} obj An object
  * @returns {Promise<string>}
  */
 async function objToAttrs (obj) {
@@ -314,6 +311,14 @@ class Ref {}
  * @class Partial
  */
 class Emitter extends Map {
+  constructor (emitter) {
+    super()
+    if (emitter) {
+      // Forward all event to provided emitter
+      this.on('*', emitter.emit.bind(emitter))
+    }
+  }
+
   on (event, fn) {
     const listeners = this.get(event)
     if (listeners) listeners.add(fn)
