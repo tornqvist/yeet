@@ -105,6 +105,9 @@ export class Partial {
   async * [Symbol.asyncIterator] (state = {}) {
     const { strings, values } = this
 
+    // Claim top level state to prevent mutations
+    if (!cache.has(state)) cache.set(state, this)
+
     let html = ''
     for (let i = 0, len = strings.length; i < len; i++) {
       const string = strings[i]
@@ -123,7 +126,7 @@ export class Partial {
       if (isAttr) {
         if (value instanceof Ref) {
           const match = REF_ATTR.exec(string)
-          console.assert(match, !match && `swf: Got ref as value for \`${string.match(ATTRIBUTE)?.[2]}\`, use instead \`ref=\${myRef}\`.`)
+          console.assert(match, !match && `swf: Got a ref as value for \`${string.match(ATTRIBUTE)?.[2]}\`, use instead \`ref=\${myRef}\`.`)
           yield string.replace(match[0], '')
           continue
         } else if (typeof value === 'boolean' || value == null) {
@@ -131,7 +134,7 @@ export class Partial {
           if (attr && BOOL_PROPS.includes(name)) {
             console.assert(!quote, quote && `swf: Boolean attribute \`${name}\` should not be quoted, use instead \`${name}=\${${JSON.stringify(value)}}\`.`)
             if (!value) {
-              // Drop falsy boolean attribute altogether
+              // Drop falsy boolean attributes altogether
               yield string.slice(0, (attr.length + 1) * -1)
               continue
             }
