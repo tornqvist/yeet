@@ -9,7 +9,7 @@
     "default": "./index.js"
   },
   "scripts": {
-    "test": "uvu test/server && node test/browser/run.js"
+    "test": "uvu test/server && umu test/browser && standard"
   },
   "files": [
     "index.js",
@@ -22,10 +22,8 @@
     "test": "test"
   },
   "devDependencies": {
-    "@rollup/plugin-node-resolve": "^11.0.0",
-    "puppeteer": "^5.5.0",
-    "rollup": "^2.34.1",
     "standard": "^16.0.3",
+    "umu": "0.0.2",
     "uvu": "^0.5.1"
   }
 }
