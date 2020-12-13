@@ -39,6 +39,11 @@ attributes('bool props', async function () {
   assert.is(await res.render(), '<input type="checkbox" disabled="disabled" data-hidden=false>')
 })
 
+attributes('can include query string', async function () {
+  const res = html`<a class="${'test'}" href="/?requried=${false}&string=${'string'}" target="${'_blank'}">Click me!</a>`
+  assert.is(await res.render(), '<a class="test" href="/?requried=false&string=string" target="_blank">Click me!</a>')
+})
+
 const refs = suite('ref')
 
 refs('ref', async function () {

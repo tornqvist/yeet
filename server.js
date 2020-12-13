@@ -1,7 +1,7 @@
 import { Readable, PassThrough } from 'stream'
 
 const REF_ATTR = /\s*ref=("|')?$/i
-const ATTRIBUTE = /<[a-z-]+[^>]*?\s+(([^\t\n\f "'>/=]+)=("|')?)?$/i // TODO: guard queries
+const ATTRIBUTE = /<[a-z-]+[^>]*?\s+(([^\t\n\f "'>/=]+)=("|')?)?$/i
 const BOOL_PROPS = [
   'async', 'autofocus', 'autoplay', 'checked', 'controls', 'default',
   'defaultchecked', 'defer', 'disabled', 'formnovalidate', 'hidden',
