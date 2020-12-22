@@ -55,15 +55,18 @@ export function ref () {
 }
 
 /**
- * Mount thing onto DOM node
- * @param {any} value The thing to mount
- * @param {window.Node} [node] Any compatible node
+ * Mount partial onto DOM node
+ * @param {Partial} partial The partial to mount
+ * @param {window.Node} node Any compatible node
  * @returns {window.Node}
  */
-export function mount (value, node, state = {}) {
-  const ctx = new Context(value.key, state)
-  node = render(value.template, node, ctx)
-  ctx.update(value.values)
+export function mount (partial, node, state = {}) {
+  let ctx = cache.get(node)
+  if (!ctx || ctx.key !== partial.key) {
+    ctx = new Context(partial.key, state)
+    node = render(partial.template, node, ctx)
+  }
+  ctx.update(partial.values)
   cache.set(node, ctx)
   return node
 }
@@ -240,7 +243,9 @@ function render (template, node, ctx = cache.get(node)) {
 
         // FIXME: probably has an impact on performance
         const fragment = document.createDocumentFragment()
-        for (const child of newChild) fragment.appendChild(child)
+        for (const child of newChild) {
+          if (child != null) fragment.appendChild(child)
+        }
         insert(fragment)
 
         remove(oldChildren)
@@ -257,12 +262,16 @@ function render (template, node, ctx = cache.get(node)) {
             }
           } else {
             newChild = toNode(newChild)
-            if (newChild) replace(oldChild, newChild)
-            else remove(oldChild)
+            if (newChild == null) remove(oldChild)
+            else replace(oldChild, newChild)
           }
         } else {
-          newChild = toNode(newChild)
-          if (newChild) insert(oldChild)
+          if (newChild instanceof Partial) {
+            newChild = newChild.render(stack[0]?.state)
+          } else {
+            newChild = toNode(newChild)
+          }
+          if (newChild != null) insert(newChild)
         }
       }
 
@@ -270,7 +279,12 @@ function render (template, node, ctx = cache.get(node)) {
     }
 
     function insert (newChild) {
-      const next = list.slice(index + 1).find(Boolean)
+      let next
+      for (const value of list.slice(index + 1)) {
+        if (isArray(value)) next = value.find(Boolean)
+        else next = value
+        if (value) break
+      }
       if (next) next.before(newChild)
       else node.append(newChild)
     }

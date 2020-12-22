@@ -9,23 +9,42 @@ order('is preserved for arrays', function () {
   const children = [
     () => html`<li>1</li>`,
     () => html`<li>2</li>`,
-    () => html`<li>3</li>`,
-    () => html`<li>4</li>`
+    () => html`<li>3</li>`
   ]
   mount(main(), ul)
-  const [one, two, three, four] = ul.childNodes
-  assert.is(ul.innerText, '1234')
+  const [one, two, three] = ul.childNodes
+  assert.is(ul.innerText, '123')
   children.reverse()
   mount(main(), ul)
-  // console.log(ul.childNodes[0].outerHTML, four.outerHTML)
-  // assert.is(ul.childNodes[0], four)
-  // assert.is(ul.childNodes[1], three)
-  // assert.is(ul.childNodes[2], two)
-  // assert.is(ul.childNodes[3], one)
-  assert.is(ul.innerText, '4321')
+  assert.is(ul.childNodes[0], three)
+  assert.is(ul.childNodes[1], two)
+  assert.is(ul.childNodes[2], one)
+  assert.is(ul.innerText, '321')
 
   function main () {
     return html`<ul>${children.map((fn) => fn())}</ul>`
+  }
+})
+
+order('is not preserved outside arrays', function () {
+  const ul = document.createElement('ul')
+  const children = [
+    () => html`<li>1</li>`,
+    () => html`<li>2</li>`,
+    () => html`<li>3</li>`
+  ]
+  mount(main(children), ul)
+  const [one, two, three] = ul.childNodes
+  assert.is(ul.innerText, '123')
+  children.reverse()
+  mount(main(children.slice(1), children[0]), ul)
+  assert.is(ul.childNodes[0], two)
+  assert.is(ul.childNodes[1], one)
+  assert.is.not(ul.childNodes[3], three)
+  assert.is(ul.innerText, '213')
+
+  function main (children, child) {
+    return html`<ul>${children.map((fn) => fn())}${child?.()}</ul>`
   }
 })
 
