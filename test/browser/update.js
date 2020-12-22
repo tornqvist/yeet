@@ -48,8 +48,6 @@ order('has no effect outside array', function () {
   }
 })
 
-order.run()
-
 const fragments = suite('fragments')
 
 fragments('do not leak', function () {
@@ -72,5 +70,5 @@ fragments('do not leak', function () {
   }
 })
 
+order.run()
 fragments.run()
-// TODO: SVG

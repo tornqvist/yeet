@@ -31,6 +31,44 @@ partial('can render string', function () {
   assert.is(res.nodeValue, 'Hello world!')
 })
 
+partial('trim whitespace wrapping single element nodes', function () {
+  const res = html`
+    <span>
+      Hello world!
+    </span>
+  `.render()
+  assert.instance(res, window.HTMLSpanElement)
+  assert.snapshot(res.innerHTML, '\n     Hello world!\n    ')
+})
+
+partial('trim whitespace wrapping fragments', function () {
+  const res = html`
+    <span>Hello</span> <span>world!</span>
+  `.render()
+  assert.instance(res, window.DocumentFragment)
+  assert.is(res.childNodes.length, 3)
+  assert.is(res.childElementCount, 2)
+  const div = document.createElement('div')
+  div.append(res)
+  assert.snapshot(div.innerHTML, '<span>Hello</span> <span>world!</span>')
+})
+
+partial('preserve whitespace wrapping text nodes', function () {
+  const res = html`  Hello world!	`.render() // eslint-disable-line no-tabs
+  assert.instance(res, window.Text)
+  assert.snapshot(res.nodeValue, '  Hello world!	') // eslint-disable-line no-tabs
+})
+
+partial.only('preserve whitespace wrapping text nodes in fragments', function () {
+  const res = html`  Hello <span>world!</span>	`.render() // eslint-disable-line no-tabs
+  assert.instance(res, window.DocumentFragment)
+  assert.is(res.childNodes.length, 2)
+  assert.is(res.childElementCount, 1)
+  const div = document.createElement('div')
+  div.append(res)
+  assert.snapshot(div.innerHTML, '  Hello <span>world!</span>')
+})
+
 const attributes = suite('attributes')
 
 attributes('array values are space delimited', function () {

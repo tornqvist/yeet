@@ -7,6 +7,8 @@ const hooks = new WeakMap()
 const refs = new WeakMap()
 
 const TAG = /<[a-z-]+ [^>]+$/i
+const LEADING_WHITESPACE = /^\s+(<)/
+const TRAILING_WHITESPACE = /(>)\s+$/
 const ATTRIBUTE = /<[a-z-]+[^>]*?\s+(([^\t\n\f "'>/=]+)=("|')?)?$/i
 const PLACEHOLDER = /(?:data-)?__placeholder(\d+)__/
 const PLACEHOLDERS = /(?:data-)?__placeholder(\d+)__/g
@@ -374,21 +376,24 @@ function parse (strings) {
   if (template) return template
 
   const { length } = strings
-  template = document.createElement('template')
-  template.innerHTML = strings.reduce(function compile (res, string, index) {
+  const tmpl = document.createElement('template')
+  tmpl.innerHTML = strings.reduce(function compile (res, string, index) {
     res += string
     if (index === length - 1) return res
     if (ATTRIBUTE.test(res)) res += `__placeholder${index}__`
     else if (TAG.test(res)) res += `data-__placeholder${index}__`
     else res += `<!--__placeholder${index}__-->`
     return res
-  }, '')
-  const { content } = template
+  }, '').replace(LEADING_WHITESPACE, '$1').replace(TRAILING_WHITESPACE, '$1')
+
+  const { content } = tmpl
   template = content.childNodes.length > 1 ? content : content.childNodes[0]
+
   const { nodeType, nodeValue } = template
   if (nodeType === COMMENT_NODE && PLACEHOLDER.test(nodeValue)) {
     template = content
   }
+
   templates.set(strings, template)
   return template
 }
