@@ -43,4 +43,10 @@ test('mount children out of order', function () {
   assert.is(div.innerHTML, '<strong>one</strong><span id="three">two</span> <span id="one">three</span>')
 })
 
+test('mount fragment', function () {
+  const div = document.createElement('div')
+  mount(html`Hello <span>world!</span>`, div)
+  assert.is(div.outerHTML, '<div>Hello <span>world!</span></div>')
+})
+
 test.run()

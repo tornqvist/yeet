@@ -96,7 +96,7 @@ function render (template, node, ctx = cache.get(node)) {
     return node
   }
 
-  if (nodeType === ELEMENT_NODE) {
+  if (nodeType === ELEMENT_NODE && template.nodeType === ELEMENT_NODE) {
     const placeholders = []
     const fixed = []
 
