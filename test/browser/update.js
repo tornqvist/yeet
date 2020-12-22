@@ -4,7 +4,7 @@ import { html, mount } from '../../index.js'
 
 const order = suite('order')
 
-order('is preserved for arrays', function () {
+order('is rearrenged for array', function () {
   const ul = document.createElement('ul')
   const children = [
     () => html`<li>1</li>`,
@@ -26,7 +26,7 @@ order('is preserved for arrays', function () {
   }
 })
 
-order('is not preserved outside arrays', function () {
+order('has no effect outside array', function () {
   const ul = document.createElement('ul')
   const children = [
     () => html`<li>1</li>`,
@@ -49,3 +49,28 @@ order('is not preserved outside arrays', function () {
 })
 
 order.run()
+
+const fragments = suite('fragments')
+
+fragments('do not leak', function () {
+  const ul = document.createElement('ul')
+
+  mount(main(html`<li>1</li>`, html`<li>2</li><li>3</li>`), ul)
+  assert.is(ul.innerText, '123')
+
+  mount(main(html`<li>1</li>`, html`<li>2</li><li>3</li>`), ul)
+  assert.is(ul.innerText, '123')
+
+  mount(main(null, html`<li>2</li><li>3</li>`), ul)
+  assert.is(ul.innerText, '23')
+
+  mount(main(html`<li>1</li>`, html`<li>2</li><li>3</li>`), ul)
+  assert.is(ul.innerText, '123')
+
+  function main (a, b) {
+    return html`<ul>${a}${b}</ul>`
+  }
+})
+
+fragments.run()
+// TODO: SVG

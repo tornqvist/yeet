@@ -15,6 +15,7 @@ const RENDER = 'render'
 const TEXT_NODE = 3
 const COMMENT_NODE = 8
 const ELEMENT_NODE = 1
+const FRAGMENT_NODE = 11
 // const AFTER_UNMOUNT = 1
 // const AFTER_UPDATE = 2
 // const AFTER_RENDER = 3
@@ -258,12 +259,9 @@ function render (template, node, ctx = cache.get(node)) {
               newChild = oldChild
             } else {
               newChild = newChild.render(stack[0]?.state)
-              replace(oldChild, newChild)
             }
           } else {
             newChild = toNode(newChild)
-            if (newChild == null) remove(oldChild)
-            else replace(oldChild, newChild)
           }
         } else {
           if (newChild instanceof Partial) {
@@ -271,8 +269,21 @@ function render (template, node, ctx = cache.get(node)) {
           } else {
             newChild = toNode(newChild)
           }
-          if (newChild != null) insert(newChild)
         }
+
+        let nextChild = newChild
+        if (newChild?.nodeType === FRAGMENT_NODE) {
+          nextChild = [...newChild.childNodes]
+        }
+
+        if (oldChild) {
+          if (newChild == null) remove(oldChild)
+          else replace(oldChild, newChild)
+        } else if (newChild != null) {
+          insert(toNode(newChild))
+        }
+
+        newChild = nextChild
       }
 
       oldChild = list[index] = newChild
@@ -405,14 +416,17 @@ function toNode (value) {
 }
 
 function remove (value) {
-  if (!isArray(value)) return value.remove()
-  for (const child of value) child.remove()
+  if (!isArray(value)) value.remove()
+  else for (const child of value) child.remove()
 }
 
 function replace (value, child) {
-  if (!isArray(value)) return value.replaceWith(child)
-  value.replaceWith(child)
-  remove(value)
+  if (isArray(value)) {
+    value[0].replaceWith(child)
+    remove(value.slice(1))
+  } else {
+    value.replaceWith(child)
+  }
 }
 
 function Placeholder () {}
