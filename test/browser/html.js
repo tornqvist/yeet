@@ -104,6 +104,21 @@ children('from arrays', function () {
   assert.is(res.outerHTML, '<div>Hello <span>world!</span></div>')
 })
 
+children('can be plain string', function () {
+  const res = html`${'Hello world!'}`.render()
+  assert.instance(res, window.DocumentFragment)
+  assert.is(res.childNodes.length, 1)
+  assert.is(res.textContent, 'Hello world!')
+})
+
+children('can be array of mixed content', function () {
+  const res = html`${['Hello ', html`<span>world!</span>`]}`.render()
+  assert.instance(res, window.DocumentFragment)
+  assert.is(res.childNodes.length, 2)
+  assert.is(res.childElementCount, 1)
+  assert.is(res.textContent, 'Hello world!')
+})
+
 partial.run()
 attributes.run()
 refs.run()

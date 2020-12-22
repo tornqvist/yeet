@@ -374,6 +374,10 @@ function parse (strings) {
   }, '')
   const { content } = template
   template = content.childNodes.length > 1 ? content : content.childNodes[0]
+  const { nodeType, nodeValue } = template
+  if (nodeType === COMMENT_NODE && PLACEHOLDER.test(nodeValue)) {
+    template = content
+  }
   templates.set(strings, template)
   return template
 }
