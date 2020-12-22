@@ -111,7 +111,7 @@ render('return just child', async function () {
       return html`<div>Hello world!</div>`
     })
   })
-  assert.is(await Main().render(), '<div>Hello world!</div>')
+  assert.is(await Main.render(), '<div>Hello world!</div>')
 })
 
 render('nested component', async function () {
@@ -154,7 +154,7 @@ state('is mutable by top level component', async function () {
     assert.is(state, initialState)
     state.test = 'test'
   })
-  await Mutator().render(initialState)
+  await Mutator.render(initialState)
   assert.equal(initialState, { test: 'test' })
 })
 
@@ -164,15 +164,14 @@ state('is not mutable by nested component', async function () {
     assert.is.not(state, initialState)
     state.test = 'test'
   })
-  await html`<div>${Mutator()}</div>`.render(initialState)
+  await html`<div>${Mutator}</div>`.render(initialState)
   assert.equal(initialState, {})
 })
 
 state('is inherited from parent', async function () {
   const initialState = { test: 'test' }
   const MainComponent = Component(Main)
-  const res = MainComponent()
-  assert.is(await res.render(initialState), '<div>Hello world!</div>')
+  assert.is(await MainComponent.render(initialState), '<div>Hello world!</div>')
   assert.is(initialState.child, undefined)
 
   function Main (state, emit) {
@@ -197,10 +196,9 @@ state('is inherited from parent', async function () {
 
 const stores = suite('stores')
 
-stores('arugments and return', async function () {
+stores('arguments and return', async function () {
   const MainComponent = Component(Main)
-  const res = MainComponent()
-  await res.render()
+  await MainComponent.render()
 
   function Main (state, emit) {
     const res = use(function (_state, emitter) {
@@ -215,8 +213,7 @@ stores('arugments and return', async function () {
 stores('emitter', async function () {
   let queue = 3
   const MainComponent = Component(Main)
-  const res = MainComponent()
-  await res.render()
+  await MainComponent.render()
   assert.is(queue, 0, 'all events triggered')
 
   function Main (state, emit) {
@@ -251,8 +248,7 @@ stores('emitter', async function () {
 stores('events bubble', async function () {
   let queue = 2
   const MainComponent = Component(Main)
-  const res = MainComponent()
-  await res.render()
+  await MainComponent.render()
   assert.is(queue, 0, 'all events triggered')
 
   function Main (state, emit) {

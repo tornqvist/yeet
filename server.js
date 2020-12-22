@@ -49,11 +49,12 @@ export function html (strings, ...values) {
  * @export
  * @param {Partial} partial The partial to mount
  * @param {string} selector A DOM selector
+ * @param {Object} [state] Initial state
  * @returns {Partial}
  */
-export function mount (partial, selector) {
-  if (typeof partial === 'function') partial = partial()
+export function mount (partial, selector, state = {}) {
   partial.selector = selector
+  partial.state = state
   return partial
 }
 
@@ -90,6 +91,12 @@ export class Partial {
     this.values = values
   }
 
+  /**
+   * Render partial to promise
+   * @param {Object} [state] Root state passed down to components
+   * @returns {Promise<string>}
+   * @memberof Partial
+   */
   async render (state) {
     let string = ''
     const iterable = this[Symbol.asyncIterator](state)
@@ -97,11 +104,23 @@ export class Partial {
     return string
   }
 
+  /**
+   * Render partial to stream
+   * @param {Object} [state] Root state passed down to components
+   * @returns {Readable}
+   * @memberof Partial
+   */
   renderToStream (state) {
     const iterable = this[Symbol.asyncIterator](state)
     return Readable.from(iterable)
   }
 
+  /**
+   * Iterate partial
+   * @param {Object} [state={}] Root state passed down to components
+   * @memberof Partial
+   * @returns {AsyncGenerator}
+   */
   async * [Symbol.asyncIterator] (state = {}) {
     const { strings, values } = this
 
@@ -133,13 +152,11 @@ export class Partial {
           const [, attr, name, quote] = html.match(ATTRIBUTE)
           if (attr && BOOL_PROPS.includes(name)) {
             console.assert(!quote, quote && `swf: Boolean attribute \`${name}\` should not be quoted, use instead \`${name}=\${${JSON.stringify(value)}}\`.`)
-            if (!value) {
-              // Drop falsy boolean attributes altogether
-              yield string.slice(0, (attr.length + 1) * -1)
-              continue
-            }
-            // Use name as value for truthy boolean values
-            value = `"${name}"`
+            // Drop falsy boolean attributes altogether
+            if (!value) yield string.slice(0, (attr.length + 1) * -1)
+            // Leave only the attribute name in place for truthy attributes
+            else yield string.slice(0, (attr.length - name.length) * -1)
+            continue
           }
         } else if (Array.isArray(value)) {
           value = await Promise.all(value.map(function (val) {
@@ -178,22 +195,23 @@ export class Partial {
  * @export
  * @param {function} fn Component setup function
  * @param {...*} [args] Arguments to forward to component
- * @return {(function|Component)}
+ * @return {Component}
  */
 export function Component (fn, ...args) {
-  if (!(this instanceof Component)) {
-    return function render () {
-      if (arguments.length) args = arguments
-      return new Component(fn, ...args)
-    }
+  Object.setPrototypeOf(Render, Component.prototype)
+  Render.fn = fn
+  Render.args = args
+  return Render
+
+  function Render () {
+    const _args = arguments.length ? arguments : args
+    return new Component(fn, ..._args)
   }
-  this.fn = fn
-  this.args = args
 }
 
 Component.prototype = Object.create(Partial.prototype)
 Component.prototype.constructor = Component
-Component.prototype.resolve = function (state = {}) {
+Component.prototype.unwrap = function (state) {
   const { fn, args } = this
   const ctx = current = new Context(state)
   const emit = ctx.emitter.emit.bind(ctx.emitter)
@@ -204,13 +222,13 @@ Component.prototype.resolve = function (state = {}) {
   })
 }
 Component.prototype.render = async function (state = {}) {
-  const res = await this.resolve(state)
+  const res = await this.unwrap(state)
   if (res instanceof Partial) return res.render(state)
   return res
 }
 Component.prototype.renderToStream = function (state = {}) {
   const stream = new PassThrough()
-  this.resolve(state).then(function (res) {
+  this.unwrap(state).then(function (res) {
     if (res instanceof Partial) res.renderToStream(state).pipe(stream)
     else if (res) stream.write(res)
     else stream.end()
@@ -218,7 +236,7 @@ Component.prototype.renderToStream = function (state = {}) {
   return stream
 }
 Component.prototype[Symbol.asyncIterator] = async function * (state = {}) {
-  const res = await this.resolve(state)
+  const res = await this.unwrap(state)
   if (res instanceof Partial) yield * res
   else yield res
 }
@@ -235,7 +253,6 @@ async function * resolve (value, state) {
     return
   }
 
-  if (typeof value === 'function') value = value()
   if (value instanceof Partial) {
     yield * value[Symbol.asyncIterator](state)
   } else {
@@ -258,13 +275,14 @@ async function objToAttrs (obj) {
 }
 
 /**
- * Unwind a value and possible generator
+ * Unwind nested generators, awaiting yielded promises
  * @param {*} value The value to unwind
- * @param {array} args Arguments to forward to functions
+ * @param {Context} ctx Current context
+ * @param {Array} args Arguments to forward to functions
  * @returns {Promise<*>}
  */
 async function unwind (value, ctx, args) {
-  while (typeof value === 'function') {
+  while (typeof value === 'function' && !(value instanceof Component)) {
     current = ctx
     value = value(...args)
     args = []
@@ -311,7 +329,7 @@ class Ref {}
 
 /**
  * A basic event emitter implementation
- * @class Partial
+ * @class Emitter
  */
 class Emitter extends Map {
   constructor (emitter) {

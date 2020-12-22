@@ -44,8 +44,10 @@ partial('can render to stream', async function () {
 const mounting = suite('mount')
 
 mounting('decorates partial', async function () {
-  const res = mount(html`<body>Hello planet!</body>`, 'body')
+  const initialState = {}
+  const res = mount(html`<body>Hello planet!</body>`, 'body', initialState)
   assert.instance(res, Partial)
+  assert.is(res.state, initialState)
   assert.is(res.selector, 'body')
   assert.is(await res.render(), '<body>Hello planet!</body>')
 })

@@ -36,7 +36,7 @@ attributes('can be spread', async function () {
 
 attributes('bool props', async function () {
   const res = html`<input type="checkbox" required=${false} disabled=${true} data-hidden=${false}>`
-  assert.is(await res.render(), '<input type="checkbox" disabled="disabled" data-hidden=false>')
+  assert.is(await res.render(), '<input type="checkbox" disabled data-hidden=false>')
 })
 
 attributes('can include query string', async function () {

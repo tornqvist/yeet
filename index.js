@@ -7,8 +7,9 @@ const hooks = new WeakMap()
 const refs = new WeakMap()
 
 const TAG = /<[a-z-]+ [^>]+$/i
-const PLACEHOLDER = /__placeholder(\d+)__/
-const PLACEHOLDERS = /__placeholder(\d+)__/g
+const ATTRIBUTE = /<[a-z-]+[^>]*?\s+(([^\t\n\f "'>/=]+)=("|')?)?$/i
+const PLACEHOLDER = /(?:data-)?__placeholder(\d+)__/
+const PLACEHOLDERS = /(?:data-)?__placeholder(\d+)__/g
 const EVENT = '__CUSTOM_EVENT__'
 const RENDER = 'render'
 const TEXT_NODE = 3
@@ -26,15 +27,13 @@ const {
 } = Object
 
 /**
- * Create HTML content placeholder
+ * Create HTML partial
  * @param {Array} strings Template literal strings
  * @param {...any} values Template literal values
- * @returns {Placeholder}
+ * @returns {Partial}
  */
 export function html (strings, ...values) {
-  const placeholder = new Placeholder(strings)
-  placeholders.set(placeholder, new Partial(strings, values))
-  return placeholder
+  return new Partial({ strings, values })
 }
 
 /**
@@ -43,133 +42,40 @@ export function html (strings, ...values) {
  */
 export function use (fn) {
   const ctx = stack[0]
-  fn(ctx.state, ctx)
+  fn(ctx.state, ctx.emitter)
 }
 
 /**
- * Conditionally interrupt execution preserving current DOM
- * @param {boolean} condition The condition for which to continue execution
- * @param {string} [message] The reason for stopping execution
+ * Create element reference
+ * @export
+ * @returns {Ref}
  */
-export function assert (condition, message) {
-  if (!condition) throw new Halt(message)
-}
-
-/**
- * Create a stateful function
- * @param {function} fn The constructor which instantiates the function
- * @param {Object} props A set of properties to forward to function
- * @param {...any} args Any number of arguments forwarded to function
- * @returns {Placeholder}
- */
-export function render (fn, props, ...args) {
-  const key = props?.key || fn
-  const component = new Component({ fn, props, args })
-  const placeholder = new Placeholder(key)
-  placeholders.set(placeholder, component)
-  return placeholder
+export function ref () {
+  return new Ref()
 }
 
 /**
  * Mount thing onto DOM node
  * @param {any} value The thing to mount
- * @param {Node} [node] Any compatible node
- * @returns {Node}
+ * @param {window.Node} [node] Any compatible node
+ * @returns {window.Node}
  */
-export function mount (value, node) {
-  if (typeof value === 'function') value = render(value)
-  value = unwrap(value)
-
-  const ctx = cache.get(node) || new Context()
-
-  if (!(value instanceof Partial)) {
-    value = toNode(value)
-    if (!node) return value
-    return resolve(value, node, ctx)
-  }
-
-  node = resolve(value.template, node, ctx)
-
-  try {
-    stack.unshift(ctx)
-    for (const editor of ctx.editors) {
-      update(node, editor, value.values)
-    }
-    return node
-  } finally {
-    stack.shift()
-  }
+export function mount (value, node, state = {}) {
+  const ctx = new Context(value.key, state)
+  node = render(value.template, node, ctx)
+  ctx.update(value.values)
+  cache.set(node, ctx)
+  return node
 }
 
 /**
- * Apply update on node with given editor
- * @param {Element} node A Element node
- * @param {(NodeEditor|AttributeEditor)} editor An instance of a compatible editor
- * @param {Array} values An array of new values to update with
- */
-function update (node, editor, values) {
-  if (editor instanceof NodeEditor) {
-    // TODO: Handle node
-  }
-
-  if (editor instanceof AttributeEditor) {
-    const attrs = editor.dynamic.reduce(function (attrs, { name, value }) {
-      name = resolveValue(name)
-      value = resolveValue(value)
-      if (typeof name === 'object') {
-        assign(attrs, name)
-      } else if (name.indexOf('on') === 0) {
-        const events = new EventHandler(node)
-        events.set(name, value)
-      } else if (name === 'ref') {
-        if (typeof value === 'function') return value(node)
-        refs.set(value, node)
-      } else if (value != null) {
-        attrs[name] = value
-      }
-      return attrs
-    }, {})
-
-    for (let [name, value] of entries(attrs)) {
-      if (name in node) node[name] = value
-      if (typeof value === 'boolean') value = name
-      node.setAttribute(name, value)
-    }
-
-    const allowed = keys(attrs).concat(editor.static)
-    for (const { name } of node.attributes) {
-      if (!allowed.includes(name)) {
-        if (name in node) {
-          node[name] = typeof node[name] === 'boolean' ? false : ''
-        }
-        node.removeAttribute(name)
-      }
-    }
-  }
-
-  /**
-   * Replace placeholder values with actual value
-   * @param {string} str A node property to match w/ values
-   * @returns {string}
-   */
-  function resolveValue (str) {
-    const match = PLACEHOLDER.match(str)
-    if (match && match[0] === str) {
-      return values[+match[1]]
-    }
-    return String(str).replace(PLACEHOLDERS, (_, id) => values[+id])
-  }
-}
-
-/**
- * Resolve template into node, optionally canibalizing an existing node
- * @param {(Element|Partial)} template The desired result
- * @param {Node} [node] An existing element to be updated w/ template markup
+ * Render template into node, optionally canibalizing an existing node
+ * @param {window.Node} template The desired result
+ * @param {window.Node} [node] An existing element to be updated
  * @param {Context} [ctx] Current node context
- * @returns {Node}
+ * @returns {window.Node}
  */
-function resolve (template, node, ctx = cache.get(node)) {
-  if (!ctx) ctx = new Context()
+function render (template, node, ctx = cache.get(node)) {
   if (!node) {
     node = template.cloneNode()
   } else if (events.has(node)) {
@@ -183,36 +89,102 @@ function resolve (template, node, ctx = cache.get(node)) {
     node.nodeValue = template.nodeValue
     return node
   }
+
   if (nodeType === COMMENT_NODE) {
     const { nodeValue } = node
-    if (PLACEHOLDER.test(nodeValue)) return new NodeEditor(nodeValue)
+    if (PLACEHOLDER.test(nodeValue)) return new Placeholder()
     return node
   }
 
   if (nodeType === ELEMENT_NODE) {
-    const editor = new AttributeEditor(template)
+    const placeholders = []
+    const fixed = []
 
-    editors.push(editor)
+    for (const { name, value } of template.attributes) {
+      if (PLACEHOLDER.test(name)) {
+        node.removeAttribute(name)
+        placeholders.push({ name, value })
+      } else if (PLACEHOLDER.test(value)) {
+        placeholders.push({ name, value })
+      } else {
+        fixed.push(name)
+      }
+    }
 
-    for (const name of editor.static) {
+    for (const name of fixed) {
       node.setAttribute(name, template.getAttribute(name))
     }
 
-    for (const { name } of node.attributes) {
-      if (!editor.static.includes(name)) {
-        node.removeAttribute(name)
-      }
+    if (placeholders.length) {
+      editors.push(function editAttributes (values) {
+        const attrs = placeholders.reduce(function (attrs, { name, value }) {
+          name = resolveValue(name)
+          value = resolveValue(value)
+          if (isArray(value)) {
+            attrs[name] = value.join(' ')
+          } else if (typeof name === 'object') {
+            if (isArray(name)) {
+              for (const value of name.flat()) {
+                if (typeof value === 'object') assign(attrs, value)
+                else attrs[value] = ''
+              }
+            } else {
+              assign(attrs, name)
+            }
+          } else if (name.indexOf('on') === 0) {
+            const events = new EventHandler(node)
+            events.set(name, value)
+          } else if (name === 'ref') {
+            if (typeof value === 'function') value(node)
+            else refs.set(value, node)
+          } else if (value != null) {
+            attrs[name] = value
+          }
+          return attrs
+        }, {})
+
+        for (const [name, value] of entries(attrs)) {
+          if (name in node) node[name] = value
+          else node.setAttribute(name, value)
+        }
+
+        const allowed = keys(attrs).concat(fixed)
+        for (const { name } of node.attributes) {
+          if (!allowed.includes(name)) {
+            if (name in node) {
+              node[name] = typeof node[name] === 'boolean' ? false : ''
+            }
+            node.removeAttribute(name)
+          }
+        }
+
+        /**
+         * Replace placeholder values with actual value
+         * @param {string} str A node property to match w/ values
+         * @returns {string}
+         */
+        function resolveValue (str) {
+          const match = str.match(PLACEHOLDER)
+          if (match && match[0] === str) {
+            return values[+match[1]]
+          }
+          return String(str).replace(PLACEHOLDERS, (_, id) => values[+id])
+        }
+      })
     }
   }
 
+  const children = []
   const oldChildren = toArray(node.childNodes)
-  for (const child of template.childNodes) {
-    const oldChild = match(child, oldChildren)
-    let newChild = resolve(child, oldChild, ctx)
-    if (newChild instanceof NodeEditor) {
-      editors.push(newChild)
-      newChild = document.createComment('editor')
+  for (const [index, child] of template.childNodes.entries()) {
+    const oldChild = oldChildren.find((oldChild) => canMount(oldChild, child))
+    let newChild = render(child, oldChild, ctx)
+    if (newChild instanceof Placeholder) {
+      newChild = child.cloneNode()
+      const editor = createNodeEditor(newChild, index, children)
+      editors.push(editor)
     }
+    children.push(newChild)
     node.appendChild(newChild)
     if (oldChild) oldChildren.splice(oldChildren.indexOf(oldChild), 1)
   }
@@ -222,43 +194,103 @@ function resolve (template, node, ctx = cache.get(node)) {
   }
 
   return node
-}
 
-/**
- * Find a compatible node
- * @param {(Node|Placeholder)} value The node to match
- * @param {Node[]} oldNodes Candidate nodes
- * @returns {(Node|undefined)}
- */
-function match (value, oldNodes) {
-  let candidate
-  const placeholder = placeholders.get(value)
-  for (const oldNode of oldNodes) {
-    if (!oldNode) continue
-    const ctx = cache.get(oldNode)
-    if (placeholder) {
-      if (ctx && ctx.key === placeholder.key) return oldNode
-      if (!ctx && !candidate && placeholder instanceof Partial) {
-        if (isEqualNode(placeholder.template, oldNode)) candidate = oldNode
+  function createNodeEditor (oldChild, index, list) {
+    const id = +oldChild.nodeValue.match(PLACEHOLDER)[1]
+
+    return function editNode (values) {
+      let newChild = values[id]
+
+      if (Array.isArray(newChild)) {
+        const keys = []
+        const oldChildren = isArray(oldChild) ? oldChild : [oldChild]
+        newChild = newChild.flat().map(function (newChild) {
+          if (newChild instanceof Partial) {
+            console.assert(!keys.includes(newChild.key), 'swf: Each child in an array should have a unique key prop `MyComponent({ key: \'my-key\' })`')
+            keys.push(newChild.key)
+
+            for (const [index, child] of oldChildren.entries()) {
+              const ctx = cache.get(child)
+              if (ctx?.key === newChild.key) {
+                ctx.update(newChild.values)
+                oldChildren.splice(index, 1)
+                return child
+              }
+            }
+
+            for (const [index, child] of oldChildren.entries()) {
+              if (canMount(newChild, child)) {
+                oldChildren.splice(index, 1)
+                return mount(newChild, child, stack[0]?.state)
+              }
+            }
+
+            return newChild.render(stack[0]?.state)
+          }
+
+          newChild = toNode(newChild)
+          for (const child of oldChildren) {
+            if (canMount(newChild, child)) {
+              return mount(newChild, child)
+            }
+          }
+
+          return newChild
+        })
+
+        // FIXME: probably has an impact on performance
+        const fragment = document.createDocumentFragment()
+        for (const child of newChild) fragment.appendChild(child)
+        insert(fragment)
+
+        remove(oldChildren)
+      } else {
+        if (oldChild) {
+          if (newChild instanceof Partial) {
+            const ctx = cache.get(oldChild)
+            if (ctx?.key === newChild.key) {
+              ctx.update(newChild.values)
+              newChild = oldChild
+            } else {
+              newChild = newChild.render(stack[0]?.state)
+              replace(oldChild, newChild)
+            }
+          } else {
+            newChild = toNode(newChild)
+            if (newChild) replace(oldChild, newChild)
+            else remove(oldChild)
+          }
+        } else {
+          newChild = toNode(newChild)
+          if (newChild) insert(oldChild)
+        }
       }
-    } else if (!candidate && isEqualNode(value, oldNode)) {
-      candidate = oldNode
+
+      oldChild = list[index] = newChild
+    }
+
+    function insert (newChild) {
+      const next = list.slice(index + 1).find(Boolean)
+      if (next) next.before(newChild)
+      else node.append(newChild)
     }
   }
-  return candidate
 }
 
 /**
- * Determine wether two nodes are equal
- * @param {Node} [a]
- * @param {Node} [b]
+ * Determine wether two nodes are compatible
+ * @param {window.Node} [a]
+ * @param {window.Node} [b]
  */
-function isEqualNode (a, b) {
+function canMount (a, b) {
   if (!a || !b) return false
-  if (a.id && b.id && a.id === b.id) return true
-  if (a.nodeType === TEXT_NODE && a.nodeType === b.nodeType) return true
+  if (a.id || b.id) return a.id === b.id
+  if (
+    (a.nodeType === TEXT_NODE || a.nodeType === COMMENT_NODE) &&
+    a.nodeType === b.nodeType
+  ) return true
   if (a.nodeName === b.nodeName) return true
-  return a.isEqualNode && a.isEqualNode(b)
+  return a.isEqualNode?.(b)
 }
 
 /**
@@ -321,24 +353,15 @@ function parse (strings) {
   template.innerHTML = strings.reduce(function compile (res, string, index) {
     res += string
     if (index === length - 1) return res
-    if (TAG.test(res)) res += `data-__placeholder${index}__`
+    if (ATTRIBUTE.test(res)) res += `__placeholder${index}__`
+    else if (TAG.test(res)) res += `data-__placeholder${index}__`
     else res += `<!--__placeholder${index}__-->`
     return res
-  }, '').trim()
-
+  }, '')
   const { content } = template
-  template = content.childNodes.length > 1 ? content : content.firstChild
+  template = content.childNodes.length > 1 ? content : content.childNodes[0]
   templates.set(strings, template)
   return template
-}
-
-function canMount (a, b) {
-  if (!a || !b) return false
-  if (a.nodeType !== b.nodeType) return false
-  if (a.nodeType === TEXT_NODE || a.nodeType === COMMENT_NODE) return true
-  if (a.id !== b.id) return false
-  if (a.nodeName === b.nodeName) return true
-  return a.isEqualNode(b)
 }
 
 function toNode (value) {
@@ -363,49 +386,92 @@ function toNode (value) {
   return null
 }
 
-function NodeEditor (str) {
-  this.id = +str.match(PLACEHOLDER)[1]
+function remove (value) {
+  if (!isArray(value)) return value.remove()
+  for (const child of value) child.remove()
 }
 
-function AttributeEditor (node) {
-  this.dynamic = []
-  this.static = []
+function replace (value, child) {
+  if (!isArray(value)) return value.replaceWith(child)
+  value.replaceWith(child)
+  remove(value)
+}
 
-  for (const { name, value } of node.attributes) {
-    if (PLACEHOLDER.test(name) || PLACEHOLDER.test(value)) {
-      this.dynamic.push({ name, value })
-    } else {
-      this.static.push(name)
-    }
+function Placeholder () {}
+
+export class Partial {
+  constructor ({ strings, values }) {
+    this.key = strings
+    this.strings = strings
+    this.values = values
+  }
+
+  get template () {
+    return parse(this.strings)
+  }
+
+  render (state = {}) {
+    const ctx = new Context(this.key, state)
+    const node = render(this.template, null, ctx)
+    ctx.update(this.values)
+    cache.set(node, ctx)
+    return node
   }
 }
 
-function Placeholder (key) {
-  this.key = key
+export function Component (fn, ...args) {
+  Object.setPrototypeOf(Render, Component.prototype)
+  Render.key = args.length ? args[0].key : fn
+  Render.fn = fn
+  Render.args = args
+  return Render
+
+  function Render () {
+    const _args = arguments.length ? arguments : args
+    return new Component(fn, ..._args)
+  }
 }
 
-function Partial (strings, values) {
-  this.strings = strings
-  this.values = values
-  this.template = parse(strings)
-}
+Component.prototype = Object.create(Partial.prototype)
+Component.prototype.constructor = Component
+Component.prototype.render = function (state = {}) {
+  const { key, fn, args } = this
+  const ctx = new Context(key, state)
+  const emit = ctx.emitter.emit.bind(ctx.emitter)
 
-function Component (fn, props, args) {
-  this.fn = fn
-  this.props = props
-  this.args = args
+  try {
+    stack.unshift(ctx)
+    const arr = []
+    const res = fn(state, emit)
+    const value = unwind(res, arr)
+    hooks.set(value, arr)
+    return value
+  } finally {
+    stack.shift(ctx)
+  }
 }
 
 class Context {
-  constructor (state = {}) {
+  constructor (key, state = {}) {
+    this.key = key
     this.editors = []
     this.state = state
-    this.children = new Map()
     this.emitter = new Emitter()
   }
 
   spawn () {
     return new Context(Object.create(this.state))
+  }
+
+  update (values) {
+    try {
+      stack.unshift(this)
+      for (const editor of this.editors) {
+        editor(values)
+      }
+    } finally {
+      stack.shift()
+    }
   }
 
   bind (node) {
@@ -418,7 +484,7 @@ class Context {
     emitter.on('*', function (name, ...args) {
       if (name !== RENDER && node.parentNode) {
         const details = { name, args }
-        node.parentNode.dispatchEvent(new CustomEvent(EVENT, { details }))
+        node.parentNode.dispatchEvent(new window.CustomEvent(EVENT, { details }))
       }
     })
 
@@ -452,12 +518,6 @@ class Emitter extends Map {
   }
 }
 
-class Hooks extends Map {
-  set (id, fn) {
-    return super.set(id, () => this.delete(id) && fn())
-  }
-}
-
 class Halt extends Error {}
 
 export class Ref {
@@ -468,6 +528,7 @@ export class Ref {
 
 class EventHandler extends Map {
   constructor (node) {
+    super()
     const cached = events.get(node)
     if (cached) return cached
     this.node = node

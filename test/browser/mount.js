@@ -31,4 +31,16 @@ test('mount children', function () {
   assert.equal(div.outerHTML, '<div><span>Hi</span> <span>planet!</span></div>')
 })
 
+test('mount children out of order', function () {
+  const div = document.createElement('div')
+  div.innerHTML = '<span id="one">one</span> <strong>two</strong><span id="three">three</span>'
+  const [one, space, two, three] = div.childNodes
+  mount(html`<div><strong>one</strong><span id="three">two</span> <span id="one">three</span></div>`, div)
+  assert.is(div.childNodes[0], two)
+  assert.is(div.childNodes[1], three)
+  assert.is(div.childNodes[2], space)
+  assert.is(div.childNodes[3], one)
+  assert.is(div.innerHTML, '<strong>one</strong><span id="three">two</span> <span id="one">three</span>')
+})
+
 test.run()

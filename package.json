@@ -23,7 +23,7 @@
   },
   "devDependencies": {
     "standard": "^16.0.3",
-    "umu": "0.0.2",
+    "umu": "^0.0.2",
     "uvu": "^0.5.1"
   }
 }
