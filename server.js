@@ -23,7 +23,7 @@ const cache = new WeakMap()
  * }
  * @export
  * @param {function} fn A store function, will be called with state and emitter
- * @returns {*}
+ * @returns {any}
  */
 export function use (fn) {
   return fn(current.state, current.emitter)
@@ -35,12 +35,23 @@ export function use (fn) {
  * html`<h1>Hello world!</h1>`
  * @export
  * @param {string[]} strings Template literal strings
- * @param {...*} values Interpolated values
+ * @param {...any} values Interpolated values
  * @returns
  */
 export function html (strings, ...values) {
   return new Partial({ strings, values })
 }
+
+/**
+ * Create svg partial
+ * @example
+ * svg`<circle cx="50" cy="50" r="50"/>`
+ * @export
+ * @param {string[]} strings Template literal strings
+ * @param {...any} values Interpolated values
+ * @returns
+ */
+export const svg = html
 
 /**
  * Declare where partial is to be mounted in DOM, useful for SSR
@@ -194,7 +205,7 @@ export class Partial {
  * html`<div>${Hello({ name: 'world' })}</div>`
  * @export
  * @param {function} fn Component setup function
- * @param {...*} [args] Arguments to forward to component
+ * @param {...any} [args] Arguments to forward to component
  * @return {Component}
  */
 export function Component (fn, ...args) {
@@ -243,7 +254,7 @@ Component.prototype[Symbol.asyncIterator] = async function * (state = {}) {
 
 /**
  * Resolve a value to string
- * @param {*} value The value to resolve
+ * @param {any} value The value to resolve
  * @param {Object} state Current state
  * @returns {AsyncGenerator}
  */
@@ -276,7 +287,7 @@ async function objToAttrs (obj) {
 
 /**
  * Unwind nested generators, awaiting yielded promises
- * @param {*} value The value to unwind
+ * @param {any} value The value to unwind
  * @param {Context} ctx Current context
  * @param {Array} args Arguments to forward to functions
  * @returns {Promise<*>}
@@ -303,7 +314,7 @@ async function unwind (value, ctx, args) {
 
 /**
  * Determine whether value is a plain object
- * @param {*} value
+ * @param {any} value
  * @returns {boolean}
  */
 function isObject (value) {
@@ -312,7 +323,7 @@ function isObject (value) {
 
 /**
  * Determine whether value is a generator object
- * @param {*} obj
+ * @param {any} obj
  * @returns {boolean}
  */
 function isGenerator (obj) {
