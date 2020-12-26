@@ -31,6 +31,7 @@ const {
 
 /**
  * Create HTML partial
+ * @export
  * @param {Array} strings Template literal strings
  * @param {...any} values Template literal values
  * @returns {Partial}
@@ -40,7 +41,19 @@ export function html (strings, ...values) {
 }
 
 /**
+ * Create SVG partial
+ * @export
+ * @param {Array} strings Template literal strings
+ * @param {...any} values Template literal values
+ * @returns {Partial}
+ */
+export function svg (strings, ...values) {
+  return new Partial({ strings, values, isSVG: true })
+}
+
+/**
  * Register a store function to be used for current component context
+ * @export
  * @param {function} fn Store function
  */
 export function use (fn) {
@@ -60,14 +73,14 @@ export function ref () {
 /**
  * Mount partial onto DOM node
  * @param {Partial} partial The partial to mount
- * @param {window.Node} node Any compatible node
- * @returns {window.Node}
+ * @param {Node} node Any compatible node
+ * @returns {Node}
  */
 export function mount (partial, node, state = {}) {
   let ctx = cache.get(node)
   if (!ctx || ctx.key !== partial.key) {
     ctx = new Context(partial.key, state)
-    node = render(partial.template, node, ctx)
+    node = render(partial.template, ctx, node)
   }
   ctx.update(partial.values)
   cache.set(node, ctx)
@@ -75,20 +88,19 @@ export function mount (partial, node, state = {}) {
 }
 
 /**
- * Render template into node, optionally canibalizing an existing node
- * @param {window.Node} template The desired result
- * @param {window.Node} [node] An existing element to be updated
- * @param {Context} [ctx] Current node context
- * @returns {window.Node}
+ * Render template, optionally canibalizing an existing node
+ * @param {Node} template The desired result
+ * @param {Context} ctx The current node context
+ * @param {Node} [node] An existing element to be updated
+ * @returns {Node}
  */
-function render (template, node, ctx = cache.get(node)) {
+function render (template, ctx, node) {
   if (!node) {
     node = template.cloneNode()
   } else if (events.has(node)) {
     events.get(node).clear()
   }
 
-  const { editors } = ctx
   const { nodeType } = node
 
   if (nodeType === TEXT_NODE) {
@@ -122,7 +134,7 @@ function render (template, node, ctx = cache.get(node)) {
     }
 
     if (placeholders.length) {
-      editors.push(function editAttributes (values) {
+      ctx.editors.push(function editAttributes (values) {
         const attrs = placeholders.reduce(function (attrs, { name, value }) {
           name = resolveValue(name)
           value = resolveValue(value)
@@ -184,11 +196,11 @@ function render (template, node, ctx = cache.get(node)) {
   const oldChildren = toArray(node.childNodes)
   for (const [index, child] of template.childNodes.entries()) {
     const oldChild = oldChildren.find((oldChild) => canMount(oldChild, child))
-    let newChild = render(child, oldChild, ctx)
+    let newChild = render(child, ctx, oldChild)
     if (newChild instanceof Placeholder) {
       newChild = child.cloneNode()
       const editor = createNodeEditor(newChild, index, children)
-      editors.push(editor)
+      ctx.editors.push(editor)
     }
     children.push(newChild)
     node.appendChild(newChild)
@@ -225,7 +237,8 @@ function render (template, node, ctx = cache.get(node)) {
             }
 
             for (const [index, child] of oldChildren.entries()) {
-              if (canMount(newChild, child)) {
+              // TODO: test
+              if (canMount(newChild.template, child)) {
                 oldChildren.splice(index, 1)
                 return mount(newChild, child, stack[0]?.state)
               }
@@ -306,8 +319,8 @@ function render (template, node, ctx = cache.get(node)) {
 
 /**
  * Determine wether two nodes are compatible
- * @param {window.Node} [a]
- * @param {window.Node} [b]
+ * @param {Node} [a]
+ * @param {Node} [b]
  */
 function canMount (a, b) {
   if (!a || !b) return false
@@ -371,13 +384,13 @@ function isGenerator (obj) {
     typeof obj.throw === 'function'
 }
 
-function parse (strings) {
+function parse (strings, isSVG = false) {
   let template = templates.get(strings)
   if (template) return template
 
   const { length } = strings
   const tmpl = document.createElement('template')
-  tmpl.innerHTML = strings.reduce(function compile (res, string, index) {
+  let html = strings.reduce(function compile (res, string, index) {
     res += string
     if (index === length - 1) return res
     if (ATTRIBUTE.test(res)) res += `__placeholder${index}__`
@@ -386,8 +399,16 @@ function parse (strings) {
     return res
   }, '').replace(LEADING_WHITESPACE, '$1').replace(TRAILING_WHITESPACE, '$1')
 
+  if (isSVG) html = `<svg>${html}</svg>`
+  tmpl.innerHTML = html
+
   const { content } = tmpl
-  template = content.childNodes.length > 1 ? content : content.childNodes[0]
+  if (isSVG) {
+    const children = content.firstElementChild.childNodes
+    template = children.length > 1 ? toNode(toArray(children)) : children[0]
+  } else {
+    template = content.childNodes.length > 1 ? content : content.childNodes[0]
+  }
 
   const { nodeType, nodeValue } = template
   if (nodeType === COMMENT_NODE && PLACEHOLDER.test(nodeValue)) {
@@ -437,19 +458,20 @@ function replace (value, child) {
 function Placeholder () {}
 
 export class Partial {
-  constructor ({ strings, values }) {
+  constructor ({ strings, values, isSVG = false }) {
     this.key = strings
     this.strings = strings
     this.values = values
+    this.isSVG = isSVG
   }
 
   get template () {
-    return parse(this.strings)
+    return parse(this.strings, this.isSVG)
   }
 
   render (state = {}) {
     const ctx = new Context(this.key, state)
-    const node = render(this.template, null, ctx)
+    const node = render(this.template, ctx)
     ctx.update(this.values)
     cache.set(node, ctx)
     return node
@@ -496,10 +518,6 @@ class Context {
     this.emitter = new Emitter()
   }
 
-  spawn () {
-    return new Context(Object.create(this.state))
-  }
-
   update (values) {
     try {
       stack.unshift(this)
@@ -509,23 +527,6 @@ class Context {
     } finally {
       stack.shift()
     }
-  }
-
-  bind (node) {
-    const { emitter } = this
-
-    node.addEventListener(EVENT, (event) => {
-      emitter.emit(event.details.name, ...event.details.args)
-    })
-
-    emitter.on('*', function (name, ...args) {
-      if (name !== RENDER && node.parentNode) {
-        const details = { name, args }
-        node.parentNode.dispatchEvent(new window.CustomEvent(EVENT, { details }))
-      }
-    })
-
-    cache.set(node, this)
   }
 }
 
