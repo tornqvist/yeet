@@ -400,6 +400,7 @@ function parse (strings, isSVG = false) {
   }, '').replace(LEADING_WHITESPACE, '$1').replace(TRAILING_WHITESPACE, '$1')
 
   if (isSVG) html = `<svg>${html}</svg>`
+  else console.assert(!html.includes('<svg'), 'swf: It looks likes you\'re trying to render an svg element with the html tag, use the svg tag instead')
   tmpl.innerHTML = html
 
   const { content } = tmpl
