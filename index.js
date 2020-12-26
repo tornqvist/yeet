@@ -237,7 +237,6 @@ function render (template, ctx, node) {
             }
 
             for (const [index, child] of oldChildren.entries()) {
-              // TODO: test
               if (canMount(newChild.template, child)) {
                 oldChildren.splice(index, 1)
                 return mount(newChild, child, stack[0]?.state)
@@ -268,6 +267,7 @@ function render (template, ctx, node) {
       } else {
         if (oldChild) {
           if (newChild instanceof Partial) {
+            // TODO: Test old child is array
             const ctx = cache.get(oldChild)
             if (ctx?.key === newChild.key) {
               ctx.update(newChild.values)
