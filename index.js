@@ -1,9 +1,7 @@
 const stack = []
-const placeholders = new WeakMap()
 const templates = new WeakMap()
 const events = new WeakMap()
 const cache = new WeakMap()
-const hooks = new WeakMap()
 const refs = new WeakMap()
 
 const TAG = /<[a-z-]+ [^>]+$/i
@@ -12,15 +10,13 @@ const TRAILING_WHITESPACE = /(>)\s+$/
 const ATTRIBUTE = /<[a-z-]+[^>]*?\s+(([^\t\n\f "'>/=]+)=("|')?)?$/i
 const PLACEHOLDER = /(?:data-)?__placeholder(\d+)__/
 const PLACEHOLDERS = /(?:data-)?__placeholder(\d+)__/g
-const EVENT = '__CUSTOM_EVENT__'
-const RENDER = 'render'
 const TEXT_NODE = 3
 const COMMENT_NODE = 8
 const ELEMENT_NODE = 1
 const FRAGMENT_NODE = 11
-// const AFTER_UNMOUNT = 1
-// const AFTER_UPDATE = 2
-// const AFTER_RENDER = 3
+const AFTER_UNMOUNT = 1
+const AFTER_UPDATE = 2
+const AFTER_RENDER = 3
 
 const { isArray, from: toArray } = Array
 const {
@@ -74,12 +70,17 @@ export function ref () {
  * Mount partial onto DOM node
  * @param {Partial} partial The partial to mount
  * @param {Node} node Any compatible node
+ * @param {Object} [state] Root state
  * @returns {Node}
  */
 export function mount (partial, node, state = {}) {
+  const { key } = partial
   let ctx = cache.get(node)
-  if (!ctx || ctx.key !== partial.key) {
-    ctx = new Context(partial.key, state)
+  if (ctx?.key !== key) {
+    ctx = new Context(key, state)
+    if (partial instanceof Component) {
+      partial = unwrap(partial, ctx)
+    }
     node = render(partial.template, ctx, node)
   }
   ctx.update(partial.values)
@@ -219,9 +220,10 @@ function render (template, ctx, node) {
     return function editNode (values) {
       let newChild = values[id]
 
-      if (Array.isArray(newChild)) {
+      if (isArray(newChild)) {
         const keys = []
         const oldChildren = isArray(oldChild) ? oldChild : [oldChild]
+        // TODO: create lookup table to avoid excessive iteration
         newChild = newChild.flat().map(function (newChild) {
           if (newChild instanceof Partial) {
             console.assert(!keys.includes(newChild.key), 'swf: Each child in an array should have a unique key prop `MyComponent({ key: \'my-key\' })`')
@@ -239,11 +241,11 @@ function render (template, ctx, node) {
             for (const [index, child] of oldChildren.entries()) {
               if (canMount(newChild.template, child)) {
                 oldChildren.splice(index, 1)
-                return mount(newChild, child, stack[0]?.state)
+                return mount(newChild, child, ctx.state)
               }
             }
 
-            return newChild.render(stack[0]?.state)
+            return newChild.render(ctx.state)
           }
 
           newChild = toNode(newChild)
@@ -268,23 +270,19 @@ function render (template, ctx, node) {
         if (oldChild) {
           if (newChild instanceof Partial) {
             // TODO: Test old child is array
-            const ctx = cache.get(oldChild)
-            if (ctx?.key === newChild.key) {
-              ctx.update(newChild.values)
+            const cached = cache.get(oldChild)
+            if (cached?.key === newChild.key) {
+              cached.update(newChild.values)
               newChild = oldChild
             } else {
-              newChild = newChild.render(stack[0]?.state)
+              newChild = newChild.render(ctx.state)
             }
-          } else {
-            newChild = toNode(newChild)
           }
-        } else {
-          if (newChild instanceof Partial) {
-            newChild = newChild.render(stack[0]?.state)
-          } else {
-            newChild = toNode(newChild)
-          }
+        } else if (newChild instanceof Partial) {
+          newChild = newChild.render(ctx.state)
         }
+
+        newChild = toNode(newChild)
 
         let nextChild = newChild
         if (newChild?.nodeType === FRAGMENT_NODE) {
@@ -334,48 +332,62 @@ function canMount (a, b) {
 }
 
 /**
- * Unwrap placeholder value
- * @param {Placeholder} value The placeholder to unwrap
+ * Unwrap component value
+ * @param {Component} component The component to unwrap
+ * @param {Context} ctx Current component context
  * @returns {any}
  */
-function unwrap (value) {
-  const placeholder = placeholders.get(value)
-  if (!placeholder) return value
-  if (placeholder instanceof Partial) return placeholder
-  if (!(placeholder instanceof Component)) return placeholder
-
-  const { fn, props, args } = placeholder
+function unwrap (component, ctx) {
+  const { fn, args } = component
 
   try {
-    const arr = []
-    const res = fn(state, emit)
-    const value = unwind(res, arr)
-    hooks.set(value, arr)
-    return value
-  } catch (err) {
-    if (err instanceof Halt) return node
-    throw err
+    stack.unshift(ctx)
+
+    let { hooks } = ctx
+    if (!hooks) hooks = ctx.hooks = []
+    return unwind(fn(ctx.state, ctx.emit), function resolve (id, value, next) {
+      console.assert(!next || !(value instanceof Promise), 'swf: Detected a promise. Async components are only supported on the server. On the client you should return a placeholder value and rerender (`emit(\'render\')`) when the promise is resolved.')
+
+      if (value instanceof Partial) {
+        if (next) hooks.unshift([id, next])
+        if (value instanceof Component) {
+          value = unwrap(value, ctx)
+        }
+        return value
+      }
+
+      if (typeof value === 'function') {
+        if (next) hooks.unshift([id, next])
+        if (id === AFTER_UNMOUNT) {
+          ctx.render = value
+          return value(...args)
+        } else {
+          return value()
+        }
+      }
+
+      return next ? next(value) : value
+    })
+  } finally {
+    stack.shift(ctx)
   }
 }
 
-function unwind (value, hooks, id = 0) {
-  while (typeof value === 'function') {
-    value = value()
-    id++
+function unwind (value, resolve, id = AFTER_UNMOUNT) {
+  while (typeof value === 'function' && !(value instanceof Component)) {
+    value = resolve(id, value)
   }
+
   if (isGenerator(value)) {
     let res = value.next()
-    while (!res.done && typeof res.value !== 'function') {
-      res = value.next(res.value)
-    }
-    if (!res.done) {
-      hooks.unshift([id, function hook () {
-        while (!res.done) res = value.next(res.value)
-      }])
-    }
-    return unwind(res.value, hooks, id + 1)
+    return resolve(id, res.value, function next (resolved) {
+      res = value.next(resolved)
+      const arg = res.done ? res.value : resolve(id, res.value, next)
+      return unwind(arg, resolve, id + 1)
+    })
   }
-  return value
+
+  return resolve(id, value)
 }
 
 function isGenerator (obj) {
@@ -387,7 +399,6 @@ function isGenerator (obj) {
 function parse (strings, isSVG = false) {
   let template = templates.get(strings)
   if (template) return template
-
   const { length } = strings
   const tmpl = document.createElement('template')
   let html = strings.reduce(function compile (res, string, index) {
@@ -481,34 +492,27 @@ export class Partial {
 
 export function Component (fn, ...args) {
   Object.setPrototypeOf(Render, Component.prototype)
-  Render.key = args.length ? args[0].key : fn
-  Render.fn = fn
+  Render.key = args[0]?.key || fn
   Render.args = args
+  Render.fn = fn
   return Render
 
   function Render () {
-    const _args = arguments.length ? arguments : args
-    return new Component(fn, ..._args)
+    if (arguments.length) args = arguments
+    return new Component(fn, ...args)
   }
 }
 
 Component.prototype = Object.create(Partial.prototype)
 Component.prototype.constructor = Component
 Component.prototype.render = function (state = {}) {
-  const { key, fn, args } = this
-  const ctx = new Context(key, state)
-  const emit = ctx.emitter.emit.bind(ctx.emitter)
-
-  try {
-    stack.unshift(ctx)
-    const arr = []
-    const res = fn(state, emit)
-    const value = unwind(res, arr)
-    hooks.set(value, arr)
-    return value
-  } finally {
-    stack.shift(ctx)
-  }
+  const ctx = new Context(this.key, state)
+  const partial = unwrap(this, ctx)
+  if (!(partial instanceof Partial)) return partial
+  const node = render(partial.template, ctx)
+  ctx.update(partial.values)
+  cache.set(node, ctx)
+  return node
 }
 
 class Context {
@@ -517,6 +521,7 @@ class Context {
     this.editors = []
     this.state = state
     this.emitter = new Emitter()
+    this.emit = this.emitter.emit.bind(this.emitter)
   }
 
   update (values) {
@@ -556,8 +561,6 @@ class Emitter extends Map {
     for (const fn of this.get(event)) fn(...args)
   }
 }
-
-class Halt extends Error {}
 
 export class Ref {
   get current () {

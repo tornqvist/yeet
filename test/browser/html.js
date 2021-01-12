@@ -59,7 +59,7 @@ partial('preserve whitespace wrapping text nodes', function () {
   assert.snapshot(res.nodeValue, '  Hello world!	') // eslint-disable-line no-tabs
 })
 
-partial.only('preserve whitespace wrapping text nodes in fragments', function () {
+partial('preserve whitespace wrapping text nodes in fragments', function () {
   const res = html`  Hello <span>world!</span>	`.render() // eslint-disable-line no-tabs
   assert.instance(res, window.DocumentFragment)
   assert.is(res.childNodes.length, 2)
