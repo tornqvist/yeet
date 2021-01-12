@@ -5,6 +5,7 @@
   "main": "index.js",
   "type": "module",
   "exports": {
+    "import": "./index.js",
     "node": "./server.js",
     "default": "./index.js"
   },
