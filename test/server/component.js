@@ -211,7 +211,7 @@ stores('arguments and return', async function () {
 })
 
 stores('emitter', async function () {
-  let queue = 3
+  let queue = 2
   const MainComponent = Component(Main)
   await MainComponent.render()
   assert.is(queue, 0, 'all events triggered')
@@ -226,12 +226,6 @@ stores('emitter', async function () {
 
       emitter.on('test', assert.unreachable)
       emitter.removeListener('test', assert.unreachable)
-
-      let count = 0
-      emitter.once('test', function (event, value) {
-        assert.is(++count, 1, 'once is only triggered once')
-        queue--
-      })
 
       emitter.on('test', function (value) {
         assert.is(value, 'test', 'got arguments')

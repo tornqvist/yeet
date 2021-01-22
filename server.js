@@ -357,14 +357,6 @@ class Emitter extends Map {
     else this.set(event, new Set([fn]))
   }
 
-  once (event, fn) {
-    const onevent = (...args) => {
-      fn(...args)
-      this.removeListener(event, onevent)
-    }
-    this.on(event, onevent)
-  }
-
   removeListener (event, fn) {
     const listeners = this.get(event)
     if (listeners) listeners.delete(fn)

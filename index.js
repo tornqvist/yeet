@@ -1,9 +1,3 @@
-const stack = []
-const templates = new WeakMap()
-const events = new WeakMap()
-const cache = new WeakMap()
-const refs = new WeakMap()
-
 const TAG = /<[a-z-]+ [^>]+$/i
 const LEADING_WHITESPACE = /^\s+(<)/
 const TRAILING_WHITESPACE = /(>)\s+$/
@@ -18,17 +12,29 @@ const AFTER_UNMOUNT = 1
 const AFTER_UPDATE = 2
 const AFTER_RENDER = 3
 
+/** @type {Array<Context>} */
+const stack = []
+
+/** @type {WeakMap<Array<String>, Node>} */
+const templates = new WeakMap()
+
+/** @type {WeakMap<Node, EventHandler>} */
+const events = new WeakMap()
+
+/** @type {WeakMap<Node, Context>} */
+const cache = new WeakMap()
+
+/** @type {WeakMap<Ref, Node>} */
+const refs = new WeakMap()
+
+const { requestAnimationFrame: raf } = window
 const { isArray, from: toArray } = Array
-const {
-  entries,
-  assign,
-  keys
-} = Object
+const { entries, assign, keys } = Object
 
 /**
  * Create HTML partial
  * @export
- * @param {string[]} strings Template literal strings
+ * @param {Array<String>} strings Template literal strings
  * @param {...any} values Template literal values
  * @returns {Partial}
  */
@@ -39,7 +45,7 @@ export function html (strings, ...values) {
 /**
  * Create SVG partial
  * @export
- * @param {string[]} strings Template literal strings
+ * @param {Array<String>} strings Template literal strings
  * @param {...any} values Template literal values
  * @returns {Partial}
  */
@@ -50,7 +56,7 @@ export function svg (strings, ...values) {
 /**
  * Register a store function to be used for current component context
  * @export
- * @param {function} fn Store function
+ * @param {function(object, Emitter): any} fn Store function
  */
 export function use (fn) {
   const ctx = stack[0]
@@ -70,7 +76,7 @@ export function ref () {
  * Mount partial onto DOM node
  * @param {Partial} partial The partial to mount
  * @param {Node} node Any compatible node
- * @param {Object} [state] Root state
+ * @param {object} [state={}] Root state
  * @returns {Node}
  */
 export function mount (partial, node, state = {}) {
@@ -83,8 +89,12 @@ export function mount (partial, node, state = {}) {
     }
     node = render(partial.template, ctx, node)
   }
-  ctx.update(partial.values)
+  ctx.update(partial)
   cache.set(node, ctx)
+  for (const [id, fn] of ctx.hooks) {
+    if (id >= AFTER_RENDER) fn()
+    if (id === AFTER_UPDATE) raf(fn)
+  }
   return node
 }
 
@@ -98,8 +108,16 @@ export function mount (partial, node, state = {}) {
 function render (template, ctx, node) {
   if (!node) {
     node = template.cloneNode()
-  } else if (events.has(node)) {
-    events.get(node).clear()
+  } else {
+    // Remove any events attached to element
+    if (events.has(node)) events.get(node).clear()
+    // Call unmount hooks attached to element
+    const cached = cache.get(node)
+    if (cached) {
+      for (const [id, fn] of cached.hooks) {
+        if (id === AFTER_UNMOUNT) fn()
+      }
+    }
   }
 
   const { nodeType } = node
@@ -116,7 +134,10 @@ function render (template, ctx, node) {
   }
 
   if (nodeType === ELEMENT_NODE && template.nodeType === ELEMENT_NODE) {
+    /** @type {Array<{name: String, value: String}>} */
     const placeholders = []
+
+    /** @type {Array<String>} */
     const fixed = []
 
     for (const { name, value } of template.attributes) {
@@ -135,7 +156,7 @@ function render (template, ctx, node) {
     }
 
     if (placeholders.length) {
-      ctx.editors.push(function editAttributes (values) {
+      ctx.editors.push(function attributeEditor (values) {
         const attrs = placeholders.reduce(function (attrs, { name, value }) {
           name = resolveValue(name)
           value = resolveValue(value)
@@ -179,8 +200,8 @@ function render (template, ctx, node) {
 
         /**
          * Replace placeholder values with actual value
-         * @param {string} str A node property to match w/ values
-         * @returns {string}
+         * @param {String} str A node property to match w/ values
+         * @returns {String}
          */
         function resolveValue (str) {
           const match = str.match(PLACEHOLDER)
@@ -214,6 +235,13 @@ function render (template, ctx, node) {
 
   return node
 
+  /**
+   * Create a function which updated the element in place
+   * @param {Node} oldChild The current (placeholder) node
+   * @param {Number} index The nodes current position
+   * @param {Array<Node|[Node]>} list All sibling nodes
+   * @returns {function(Array<any>): void}
+   */
   function createNodeEditor (oldChild, index, list) {
     const id = +oldChild.nodeValue.match(PLACEHOLDER)[1]
 
@@ -221,37 +249,48 @@ function render (template, ctx, node) {
       let newChild = values[id]
 
       if (isArray(newChild)) {
-        const keys = []
+        /** @type {WeakMap<any, Array<[Node, Context, Number]>>} */
+        const oldKeys = new WeakMap()
+
+        /** @type {Array<Node>} */
         const oldChildren = isArray(oldChild) ? oldChild : [oldChild]
-        // TODO: create lookup table to avoid excessive iteration
+
         newChild = newChild.flat().map(function (newChild) {
           if (newChild instanceof Partial) {
-            console.assert(!keys.includes(newChild.key), 'swf: Each child in an array should have a unique key prop `MyComponent({ key: \'my-key\' })`')
-            keys.push(newChild.key)
+            const candidates = oldKeys.get(newChild.key)
 
-            for (const [index, child] of oldChildren.entries()) {
-              const ctx = cache.get(child)
-              if (ctx?.key === newChild.key) {
-                ctx.update(newChild.values)
-                oldChildren.splice(index, 1)
-                return child
-              }
+            if (candidates?.length) {
+              // Use candidate from a previous iteration
+              const [oldChild, cached, index] = candidates.pop()
+              oldChildren.splice(index, 1)
+              cached.update(newChild)
+              return oldChild
             }
 
             for (const [index, child] of oldChildren.entries()) {
-              if (canMount(newChild.template, child)) {
-                oldChildren.splice(index, 1)
-                return mount(newChild, child, ctx.state)
+              const cached = cache.get(child)
+              if (cached) {
+                // Update element in place
+                if (cached.key === newChild.key) {
+                  cached.update(newChild)
+                  oldChildren.splice(index, 1)
+                  return child
+                }
+
+                // Store candidate for subsequent iterations
+                const candidate = [child, cached, index]
+                if (candidates) candidates.push(candidate)
+                else oldKeys.set(cached.key, [candidate])
               }
             }
 
-            return newChild.render(ctx.state)
+            newChild = newChild.render(ctx.state)
           }
 
           newChild = toNode(newChild)
           for (const child of oldChildren) {
             if (canMount(newChild, child)) {
-              return mount(newChild, child)
+              return mount(newChild, child, ctx.state)
             }
           }
 
@@ -272,7 +311,7 @@ function render (template, ctx, node) {
             // TODO: Test old child is array
             const cached = cache.get(oldChild)
             if (cached?.key === newChild.key) {
-              cached.update(newChild.values)
+              cached.update(newChild)
               newChild = oldChild
             } else {
               newChild = newChild.render(ctx.state)
@@ -343,13 +382,16 @@ function unwrap (component, ctx) {
   try {
     stack.unshift(ctx)
 
-    let { hooks } = ctx
-    if (!hooks) hooks = ctx.hooks = []
+    const { hooks } = ctx
     return unwind(fn(ctx.state, ctx.emit), function resolve (id, value, next) {
-      console.assert(!next || !(value instanceof Promise), 'swf: Detected a promise. Async components are only supported on the server. On the client you should return a placeholder value and rerender (`emit(\'render\')`) when the promise is resolved.')
+      if (window.debugger) debugger
+      console.assert(!next || !(value instanceof Promise), 'swf: Detected a promise. Async components are only supported on the server. On the client you should return a placeholder value and rerender (`emit(\'render\')`) when the promise is resolved/rejected.')
 
       if (value instanceof Partial) {
         if (next) hooks.unshift([id, next])
+        if (id === AFTER_UNMOUNT) {
+          ctx.onupdate = () => value
+        }
         if (value instanceof Component) {
           value = unwrap(value, ctx)
         }
@@ -359,7 +401,7 @@ function unwrap (component, ctx) {
       if (typeof value === 'function') {
         if (next) hooks.unshift([id, next])
         if (id === AFTER_UNMOUNT) {
-          ctx.render = value
+          ctx.onupdate = value
           return value(...args)
         } else {
           return value()
@@ -373,9 +415,17 @@ function unwrap (component, ctx) {
   }
 }
 
+/**
+ * Unwind nested (generator) functions yielding each time to callback function
+ * @param {any} value Current value
+ * @param {function(Number, any, Function?): any} resolve Function for resolving yield/return values
+ * @param {Number} [id=AFTER_UNMOUNT] Current resolution depth
+ * @returns {any}
+ */
 function unwind (value, resolve, id = AFTER_UNMOUNT) {
   while (typeof value === 'function' && !(value instanceof Component)) {
     value = resolve(id, value)
+    id++
   }
 
   if (isGenerator(value)) {
@@ -390,15 +440,27 @@ function unwind (value, resolve, id = AFTER_UNMOUNT) {
   return resolve(id, value)
 }
 
+/**
+ * Determine wether an object is a generator
+ * @param {any} obj The object to test
+ * @returns {Boolean}
+ */
 function isGenerator (obj) {
   return obj &&
     typeof obj.next === 'function' &&
     typeof obj.throw === 'function'
 }
 
+/**
+ * Parse template string into template element
+ * @param {Array<String>} strings Template literal strings
+ * @param {Boolean} [isSVG=false] Toggle parsing of SVG elements
+ * @returns {Node}
+ */
 function parse (strings, isSVG = false) {
   let template = templates.get(strings)
   if (template) return template
+
   const { length } = strings
   const tmpl = document.createElement('template')
   let html = strings.reduce(function compile (res, string, index) {
@@ -431,6 +493,11 @@ function parse (strings, isSVG = false) {
   return template
 }
 
+/**
+ * Convert value to Node
+ * @param {any} value The value to convert
+ * @returns {Node}
+ */
 function toNode (value) {
   if (value == null) return null
 
@@ -453,11 +520,20 @@ function toNode (value) {
   return null
 }
 
+/**
+ * Remove node
+ * @param {(Node|Array<Node>} value The node to remove
+ */
 function remove (value) {
   if (!isArray(value)) value.remove()
   else for (const child of value) child.remove()
 }
 
+/**
+ * Replace node(s) with new node
+ * @param {(Node|Array<Node>)} value The node(s) to replace
+ * @param {Node} child The new node
+ */
 function replace (value, child) {
   if (isArray(value)) {
     value[0].replaceWith(child)
@@ -467,9 +543,26 @@ function replace (value, child) {
   }
 }
 
-function Placeholder () {}
+/**
+ * Placeholder value for a template hole
+ * @class Placeholder
+ */
+class Placeholder {}
 
+/**
+ * A template partial
+ * @export
+ * @class Partial
+ */
 export class Partial {
+  /**
+   * Creates an instance of Partial.
+   * @param {object} opts
+   * @param {Array<String>} opts.strings
+   * @param {Array<any>} opts.values
+   * @param {Boolean} opts.isSVG
+   * @memberof Partial
+   */
   constructor ({ strings, values, isSVG = false }) {
     this.key = strings
     this.strings = strings
@@ -481,15 +574,28 @@ export class Partial {
     return parse(this.strings, this.isSVG)
   }
 
+  /**
+   * Render partial to Node
+   * @param {object} [state={}] Initial state
+   * @returns {Node}
+   * @memberof Partial
+   */
   render (state = {}) {
     const ctx = new Context(this.key, state)
     const node = render(this.template, ctx)
-    ctx.update(this.values)
+    ctx.update(this)
     cache.set(node, ctx)
     return node
   }
 }
 
+/**
+ * Creates a stateful component partial
+ * @export
+ * @param {function(object, function(String, ...any): any)} fn Component initialize function
+ * @param {...args} args Arguments forwarded to component update function
+ * @returns Component
+ */
 export function Component (fn, ...args) {
   Object.setPrototypeOf(Render, Component.prototype)
   Render.key = args[0]?.key || fn
@@ -505,30 +611,86 @@ export function Component (fn, ...args) {
 
 Component.prototype = Object.create(Partial.prototype)
 Component.prototype.constructor = Component
+
+/**
+ * Render component to node
+ * @param {object} [state={}] Initial state
+ * @returns {Node}
+ */
 Component.prototype.render = function (state = {}) {
   const ctx = new Context(this.key, state)
   const partial = unwrap(this, ctx)
-  if (!(partial instanceof Partial)) return partial
+  if (!(partial instanceof Partial)) return toNode(partial)
   const node = render(partial.template, ctx)
-  ctx.update(partial.values)
+  ctx.update(partial)
   cache.set(node, ctx)
   return node
 }
 
+/**
+ * Contextual data tied to a mounted node
+ * @class Context
+ */
 class Context {
+  /**
+   * Creates an instance of Context.
+   * @param {any} key
+   * @param {object} [state={}]
+   * @memberof Context
+   */
   constructor (key, state = {}) {
-    this.key = key
+    /** @type {Array<[Number, Function]>} */
+    this.hooks = []
+
+    /** @type {Array<Function>} */
     this.editors = []
+
+    /** @type {null|function(...any): any} */
+    this.onupdate = null
+
+    this.key = key
     this.state = state
     this.emitter = new Emitter()
     this.emit = this.emitter.emit.bind(this.emitter)
   }
 
-  update (values) {
+  /**
+   * Update node with registered editors
+   * @param {Partial} partial The partial to use for update
+   * @memberof Context
+   */
+  update (partial) {
     try {
       stack.unshift(this)
+
+      if (partial instanceof Component) {
+        partial = unwind(this.onupdate(...partial.args), (id, value, next) => {
+          console.assert(!next || !(value instanceof Promise), 'swf: Detected a promise. Async components are only supported on the server. On the client you should return a placeholder value and rerender (`emit(\'render\')`) when the promise is resolved/rejected.')
+
+          if (value instanceof Partial) {
+            if (next) this.hooks.unshift([id, next])
+            if (value instanceof Component) {
+              value = unwrap(value, this)
+            }
+            return value
+          }
+
+          if (typeof value === 'function') {
+            if (next) this.hooks.unshift([id, next])
+            return value()
+          }
+
+          return next ? next(value) : value
+        }, AFTER_UPDATE)
+      }
+
       for (const editor of this.editors) {
-        editor(values)
+        editor(partial.values)
+      }
+
+      for (const [id, fn] of this.hooks) {
+        if (id >= AFTER_RENDER) fn()
+        if (id === AFTER_UPDATE) raf(fn)
       }
     } finally {
       stack.shift()
@@ -536,25 +698,41 @@ class Context {
   }
 }
 
+/**
+ * Generic event emitter
+ * @class Emitter
+ * @extends {Map}
+ */
 class Emitter extends Map {
+  /**
+   * Attach listener for event
+   * @param {String} event Event name
+   * @param {function(...any): void} fn Event listener function
+   * @memberof Emitter
+   */
   on (event, fn) {
     const listeners = this.get(event)
     if (listeners) listeners.add(fn)
     else this.set(event, new Set([fn]))
   }
 
-  once (event, fn) {
-    this.on(event, (...args) => {
-      fn(...args)
-      this.removeListener(event, fn)
-    })
-  }
-
+  /**
+   * Remove given listener for event
+   * @param {String} event Event name
+   * @param {function(...any): void} fn Registered listener
+   * @memberof Emitter
+   */
   removeListener (event, fn) {
     const listeners = this.get(event)
     if (listeners) listeners.delete(fn)
   }
 
+  /**
+   * Emit event to all listeners, on this and all parent emitters
+   * @param {String} event Event name
+   * @param {...any} args Event parameters to be forwarded to listeners
+   * @memberof Emitter
+   */
   emit (event, ...args) {
     this.emit('*', [event, ...args])
     if (!this.has(event)) return
@@ -562,13 +740,29 @@ class Emitter extends Map {
   }
 }
 
+/**
+ * Reference a mounted node via ref#current
+ * @class Ref
+ * @export
+ */
 export class Ref {
   get current () {
     return refs.get(this)
   }
 }
 
+/**
+ * Implementation of EventListener
+ * @link https://developer.mozilla.org/en-US/docs/web/api/eventlistener
+ * @class EventHandler
+ * @extends {Map}
+ */
 class EventHandler extends Map {
+  /**
+   * Creates an instance of EventHandler.
+   * @param {Node} node The node onto which to attach events
+   * @memberof EventHandler
+   */
   constructor (node) {
     super()
     const cached = events.get(node)
@@ -576,11 +770,23 @@ class EventHandler extends Map {
     this.node = node
   }
 
+  /**
+   * Delegate to assigned event listener
+   * @param {Event} event
+   * @returns {any}
+   * @memberof EventHandler
+   */
   handleEvent (event) {
     const handle = this.get(event.type)
     return handle(event)
   }
 
+  /**
+   * Add event listener
+   * @param {String} key Event name
+   * @param {function(Event): any} value Event listener
+   * @memberof EventHandler
+   */
   set (key, value) {
     const { node } = this
     const event = key.replace(/^on/, '')

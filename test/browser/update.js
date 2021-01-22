@@ -48,28 +48,6 @@ order('has no effect outside array', function () {
   }
 })
 
-order('is preserved when similar', function () {
-  const ul = document.createElement('ul')
-  const children = [
-    () => html`<li>1</li>`,
-    () => html`<li>2</li>`,
-    () => html`<li id="three">3</li>`
-  ]
-  mount(main(children), ul)
-  const [one, two, three] = ul.childNodes
-  assert.is(ul.innerText, '123')
-  children.splice(1, 2, () => html`<li>2</li>`, () => html`<li>3</li>`)
-  mount(main(children), ul)
-  assert.is(ul.childNodes[0], one)
-  assert.is(ul.childNodes[1], two)
-  assert.is.not(ul.childNodes[2], three)
-  assert.is(ul.innerText, '123')
-
-  function main (children) {
-    return html`<ul>${children.map((fn) => fn())}</ul>`
-  }
-})
-
 const fragments = suite('fragments')
 
 fragments('do not leak', function () {
