@@ -384,7 +384,6 @@ function unwrap (component, ctx) {
 
     const { hooks } = ctx
     return unwind(fn(ctx.state, ctx.emit), function resolve (id, value, next) {
-      if (window.debugger) debugger
       console.assert(!next || !(value instanceof Promise), 'swf: Detected a promise. Async components are only supported on the server. On the client you should return a placeholder value and rerender (`emit(\'render\')`) when the promise is resolved/rejected.')
 
       if (value instanceof Partial) {
