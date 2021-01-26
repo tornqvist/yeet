@@ -57,10 +57,11 @@ export function svg (strings, ...values) {
  * Register a store function to be used for current component context
  * @export
  * @param {function(object, Emitter): any} fn Store function
+ * @returns {any}
  */
 export function use (fn) {
   const ctx = stack[0]
-  fn(ctx.state, ctx.emitter)
+  return fn(ctx.state, ctx.emitter)
 }
 
 /**
@@ -392,7 +393,7 @@ function unwrap (component, ctx) {
           ctx.onupdate = () => value
         }
         if (value instanceof Component) {
-          value = unwrap(value, ctx)
+          value = unwrap(value, ctx.spawn(value.key))
         }
         return value
       }
@@ -653,6 +654,10 @@ class Context {
     this.emit = this.emitter.emit.bind(this.emitter)
   }
 
+  spawn (key) {
+    return new Context(key, Object.create(this.state))
+  }
+
   /**
    * Update node with registered editors
    * @param {Partial} partial The partial to use for update
@@ -669,7 +674,7 @@ class Context {
           if (value instanceof Partial) {
             if (next) this.hooks.unshift([id, next])
             if (value instanceof Component) {
-              value = unwrap(value, this)
+              value = unwrap(value, this.spawn(value.key))
             }
             return value
           }
@@ -733,7 +738,7 @@ class Emitter extends Map {
    * @memberof Emitter
    */
   emit (event, ...args) {
-    this.emit('*', [event, ...args])
+    if (event !== '*') this.emit('*', event, ...args)
     if (!this.has(event)) return
     for (const fn of this.get(event)) fn(...args)
   }

@@ -3,6 +3,9 @@ import * as assert from 'uvu/assert'
 import { html, ref, Partial } from '../../index.js'
 
 const partial = suite('partial')
+const attributes = suite('attributes')
+const refs = suite('ref')
+const children = suite('children')
 
 partial('returned from html', function () {
   const res = html`<div></div>`
@@ -69,8 +72,6 @@ partial('preserve whitespace wrapping text nodes in fragments', function () {
   assert.snapshot(div.innerHTML, '  Hello <span>world!</span>')
 })
 
-const attributes = suite('attributes')
-
 attributes('array values are space delimited', function () {
   const classes = ['foo', 'bar']
   const res = html`<div class="${classes}">Hello world!</div>`.render()
@@ -105,8 +106,6 @@ attributes('can include query string', function () {
   assert.is(res.outerHTML, '<a class="test" href="http://example.com/?requried=false&amp;string=string" target="_blank">Click me!</a>')
 })
 
-const refs = suite('ref')
-
 refs('are assigned current', function () {
   const span = ref()
   const res = html`<span ref=${span}>Hello world!</span>`.render()
@@ -124,8 +123,6 @@ refs('can be function', function () {
     node = el
   }
 })
-
-const children = suite('children')
 
 children('from nested partials', function () {
   const res = html`<div>${'Hello'} ${html`<span>world!</span>`}</div>`.render()

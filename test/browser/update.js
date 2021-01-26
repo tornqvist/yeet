@@ -3,6 +3,7 @@ import * as assert from 'uvu/assert'
 import { html, mount } from '../../index.js'
 
 const order = suite('order')
+const fragments = suite('fragments')
 
 order('is rearrenged for array', function () {
   const ul = document.createElement('ul')
@@ -47,8 +48,6 @@ order('has no effect outside array', function () {
     return html`<ul>${children.map((fn) => fn())}${child?.()}</ul>`
   }
 })
-
-const fragments = suite('fragments')
 
 fragments('do not leak', function () {
   const ul = document.createElement('ul')
