@@ -1,18 +1,18 @@
 import { suite } from 'uvu'
 import * as assert from 'uvu/assert'
-import { html, Component } from '../../../index.js'
+import { html, Component, render } from '../../../index.js'
 
 const element = suite('element')
 const children = suite('children')
 // TODO: const fragment = suite('fragment')
 
 element('one-off', function () {
-  const res = Component(() => html`<h1>Hello planet!</h1>`).render()
+  const res = render(Component(() => html`<h1>Hello planet!</h1>`))
   assert.is(res.outerHTML, '<h1>Hello planet!</h1>')
 })
 
 element('w/ lifecycle', function () {
-  const res = Component(() => () => () => html`<h1>Hello planet!</h1>`).render()
+  const res = render(Component(() => () => () => html`<h1>Hello planet!</h1>`))
   assert.is(res.outerHTML, '<h1>Hello planet!</h1>')
 })
 
@@ -22,7 +22,7 @@ children('return just child', function () {
       return html`<div>Hello world!</div>`
     })
   })
-  assert.is(Main.render().outerHTML, '<div>Hello world!</div>')
+  assert.is(render(Main).outerHTML, '<div>Hello world!</div>')
 })
 
 children('nested component', function () {
@@ -39,7 +39,7 @@ children('nested component', function () {
       ${Main({ test: 'test' })}
     </div>
   `
-  assert.snapshot(dedent(res.render().outerHTML), dedent`
+  assert.snapshot(dedent(render(res).outerHTML), dedent`
     <div>
       <span>
         Hello world!
@@ -62,7 +62,7 @@ children('array of components', function () {
     }
   })
 
-  assert.snapshot(Main.render().outerHTML, dedent`
+  assert.snapshot(render(Main).outerHTML, dedent`
     <ul><li>1</li><li>2</li><li>3</li></ul>
   `)
 

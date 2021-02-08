@@ -1,6 +1,6 @@
 import { suite } from 'uvu'
 import * as assert from 'uvu/assert'
-import { html, ref, Partial } from '../../index.js'
+import { html, ref, Partial, render } from '../../index.js'
 
 const partial = suite('partial')
 const attributes = suite('attributes')
@@ -13,13 +13,13 @@ partial('returned from html', function () {
 })
 
 partial('can render element', function () {
-  const res = html`<div>Hello world!</div>`.render()
+  const res = render(html`<div>Hello world!</div>`)
   assert.instance(res, window.HTMLDivElement)
   assert.is(res.outerHTML, '<div>Hello world!</div>')
 })
 
 partial('can render fragment', function () {
-  const res = html`<span>Hello</span> <span>world!</span>`.render()
+  const res = render(html`<span>Hello</span> <span>world!</span>`)
   assert.instance(res, window.DocumentFragment)
   assert.is(res.childNodes.length, 3)
   assert.is(res.childElementCount, 2)
@@ -29,25 +29,25 @@ partial('can render fragment', function () {
 })
 
 partial('can render string', function () {
-  const res = html`Hello world!`.render()
+  const res = render(html`Hello world!`)
   assert.instance(res, window.Text)
   assert.is(res.nodeValue, 'Hello world!')
 })
 
 partial('trim whitespace wrapping single element nodes', function () {
-  const res = html`
+  const res = render(html`
     <span>
       Hello world!
     </span>
-  `.render()
+  `)
   assert.instance(res, window.HTMLSpanElement)
   assert.snapshot(res.innerHTML, '\n     Hello world!\n    ')
 })
 
 partial('trim whitespace wrapping fragments', function () {
-  const res = html`
+  const res = render(html`
     <span>Hello</span> <span>world!</span>
-  `.render()
+  `)
   assert.instance(res, window.DocumentFragment)
   assert.is(res.childNodes.length, 3)
   assert.is(res.childElementCount, 2)
@@ -57,13 +57,13 @@ partial('trim whitespace wrapping fragments', function () {
 })
 
 partial('preserve whitespace wrapping text nodes', function () {
-  const res = html`  Hello world!	`.render() // eslint-disable-line no-tabs
+  const res = render(html`  Hello world!	`) // eslint-disable-line no-tabs
   assert.instance(res, window.Text)
   assert.snapshot(res.nodeValue, '  Hello world!	') // eslint-disable-line no-tabs
 })
 
 partial('preserve whitespace wrapping text nodes in fragments', function () {
-  const res = html`  Hello <span>world!</span>	`.render() // eslint-disable-line no-tabs
+  const res = render(html`  Hello <span>world!</span>	`) // eslint-disable-line no-tabs
   assert.instance(res, window.DocumentFragment)
   assert.is(res.childNodes.length, 2)
   assert.is(res.childElementCount, 1)
@@ -74,7 +74,7 @@ partial('preserve whitespace wrapping text nodes in fragments', function () {
 
 attributes('array values are space delimited', function () {
   const classes = ['foo', 'bar']
-  const res = html`<div class="${classes}">Hello world!</div>`.render()
+  const res = render(html`<div class="${classes}">Hello world!</div>`)
   assert.equal(res.getAttribute('class'), classes.join(' '))
   assert.is(res.outerHTML, '<div class="foo bar">Hello world!</div>')
 })
@@ -82,7 +82,7 @@ attributes('array values are space delimited', function () {
 attributes('can be spread', function () {
   const attrs = { class: 'test', id: 'test' }
   const data = ['data-foo', { 'data-bar': 'baz' }]
-  const res = html`<div ${attrs} ${data}>Hello world!</div>`.render()
+  const res = render(html`<div ${attrs} ${data}>Hello world!</div>`)
   assert.is(res.className, 'test')
   assert.is(res.id, 'test')
   assert.is(res.dataset.foo, '')
@@ -91,7 +91,7 @@ attributes('can be spread', function () {
 })
 
 attributes('bool props', function () {
-  const res = html`<input type="checkbox" required=${false} disabled=${true} data-hidden=${false}>`.render()
+  const res = render(html`<input type="checkbox" required=${false} disabled=${true} data-hidden=${false}>`)
   assert.is(res.required, false)
   assert.is(res.disabled, true)
   assert.is(res.dataset.hidden, 'false')
@@ -99,7 +99,7 @@ attributes('bool props', function () {
 })
 
 attributes('can include query string', function () {
-  const res = html`<a class="test" href="http://example.com/?requried=${false}&string=${'string'}" target="${'_blank'}">Click me!</a>`.render()
+  const res = render(html`<a class="test" href="http://example.com/?requried=${false}&string=${'string'}" target="${'_blank'}">Click me!</a>`)
   assert.is(res.className, 'test')
   assert.is(res.href, 'http://example.com/?requried=false&string=string')
   assert.is(res.target, '_blank')
@@ -108,14 +108,14 @@ attributes('can include query string', function () {
 
 refs('are assigned current', function () {
   const span = ref()
-  const res = html`<span ref=${span}>Hello world!</span>`.render()
+  const res = render(html`<span ref=${span}>Hello world!</span>`)
   assert.is(span.current, res)
   assert.is(res.outerHTML, '<span>Hello world!</span>')
 })
 
 refs('can be function', function () {
   let node
-  const res = html`<span ref=${myRef}>Hello world!</span>`.render()
+  const res = render(html`<span ref=${myRef}>Hello world!</span>`)
   assert.is(node, res)
   assert.is(res.outerHTML, '<span>Hello world!</span>')
 
@@ -125,7 +125,7 @@ refs('can be function', function () {
 })
 
 children('from nested partials', function () {
-  const res = html`<div>${'Hello'} ${html`<span>world!</span>`}</div>`.render()
+  const res = render(html`<div>${'Hello'} ${html`<span>world!</span>`}</div>`)
   assert.is(res.childNodes.length, 3)
   assert.is(res.childElementCount, 1)
   assert.is(res.outerHTML, '<div>Hello <span>world!</span></div>')
@@ -133,21 +133,21 @@ children('from nested partials', function () {
 
 children('from arrays', function () {
   const children = [['Hello'], html` `, html`<span>world!</span>`]
-  const res = html`<div>${children}</div>`.render()
+  const res = render(html`<div>${children}</div>`)
   assert.is(res.childNodes.length, 3)
   assert.is(res.childElementCount, 1)
   assert.is(res.outerHTML, '<div>Hello <span>world!</span></div>')
 })
 
 children('can be plain string', function () {
-  const res = html`${'Hello world!'}`.render()
+  const res = render(html`${'Hello world!'}`)
   assert.instance(res, window.DocumentFragment)
   assert.is(res.childNodes.length, 1)
   assert.is(res.textContent, 'Hello world!')
 })
 
 children('can be array of mixed content', function () {
-  const res = html`${['Hello ', html`<span>world!</span>`]}`.render()
+  const res = render(html`${['Hello ', html`<span>world!</span>`]}`)
   assert.instance(res, window.DocumentFragment)
   assert.is(res.childNodes.length, 2)
   assert.is(res.childElementCount, 1)

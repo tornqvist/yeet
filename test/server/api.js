@@ -1,33 +1,23 @@
 import { suite } from 'uvu'
 import * as assert from 'uvu/assert'
-import { html, Partial, mount } from '../../server.js'
+import { html, Partial, mount, render, renderToStream } from '../../server.js'
 
 const partial = suite('partial')
+const mounting = suite('mount')
 
 partial('returned by html', function () {
   const partial = html`<div>Hello world!</div>`
   assert.instance(partial, Partial)
 })
 
-partial('is iterable', async function () {
-  const partial = html`<div>Hello world!</div>`
-  let string = ''
-  for await (const chunk of partial) {
-    string += chunk
-  }
-  assert.is(string, '<div>Hello world!</div>')
-})
-
 partial('can render to promise', async function () {
-  const partial = html`<div>Hello world!</div>`
-  const promise = partial.render()
+  const promise = render(html`<div>Hello world!</div>`)
   assert.instance(promise, Promise, 'is promise')
   assert.is(await promise, '<div>Hello world!</div>')
 })
 
 partial('can render to stream', async function () {
-  const partial = html`<div>Hello world!</div>`
-  const stream = partial.renderToStream()
+  const stream = renderToStream(html`<div>Hello world!</div>`)
   const string = await new Promise(function (resolve, reject) {
     let string = ''
     stream.on('data', function (chunk) {
@@ -41,15 +31,13 @@ partial('can render to stream', async function () {
   assert.is(string, '<div>Hello world!</div>')
 })
 
-const mounting = suite('mount')
-
 mounting('decorates partial', async function () {
   const initialState = {}
   const res = mount(html`<body>Hello planet!</body>`, 'body', initialState)
   assert.instance(res, Partial)
   assert.is(res.state, initialState)
   assert.is(res.selector, 'body')
-  assert.is(await res.render(), '<body>Hello planet!</body>')
+  assert.is(await render(res), '<body>Hello planet!</body>')
 })
 
 partial.run()

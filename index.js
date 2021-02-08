@@ -75,6 +75,7 @@ export function ref () {
 
 /**
  * Mount partial onto DOM node
+ * @export
  * @param {Partial} partial The partial to mount
  * @param {Node} node Any compatible node
  * @param {object} [state={}] Root state
@@ -88,7 +89,7 @@ export function mount (partial, node, state = {}) {
     if (partial instanceof Component) {
       partial = unwrap(partial, ctx)
     }
-    node = render(partial.template, ctx, node)
+    node = renderTemplate(partial.template, ctx, node)
   }
   ctx.update(partial)
   cache.set(node, ctx)
@@ -100,13 +101,24 @@ export function mount (partial, node, state = {}) {
 }
 
 /**
+ * Render partial to Node
+ * @export
+ * @param {Partia} partial The partial to be rendered
+ * @param {object} [state={}] Root state
+ * @returns {Node}
+ */
+export function render (partial, state = {}) {
+  return renderWithContext(partial, new Context(partial.key, state))
+}
+
+/**
  * Render template, optionally canibalizing an existing node
  * @param {Node} template The desired result
  * @param {Context} ctx The current node context
  * @param {Node} [node] An existing element to be updated
  * @returns {Node}
  */
-function render (template, ctx, node) {
+function renderTemplate (template, ctx, node) {
   if (!node) {
     node = template.cloneNode()
   } else {
@@ -219,7 +231,7 @@ function render (template, ctx, node) {
   const oldChildren = toArray(node.childNodes)
   for (const [index, child] of template.childNodes.entries()) {
     const oldChild = oldChildren.find((oldChild) => canMount(oldChild, child))
-    let newChild = render(child, ctx, oldChild)
+    let newChild = renderTemplate(child, ctx, oldChild)
     if (newChild instanceof Placeholder) {
       newChild = child.cloneNode()
       const editor = createNodeEditor(newChild, index, children)
@@ -285,7 +297,7 @@ function render (template, ctx, node) {
               }
             }
 
-            newChild = newChild.render(ctx.state)
+            newChild = renderWithContext(newChild, spawn(ctx, newChild.key))
           }
 
           newChild = toNode(newChild)
@@ -315,11 +327,11 @@ function render (template, ctx, node) {
               cached.update(newChild)
               newChild = oldChild
             } else {
-              newChild = newChild.render(ctx.state)
+              newChild = renderWithContext(newChild, spawn(ctx, newChild.key))
             }
           }
         } else if (newChild instanceof Partial) {
-          newChild = newChild.render(ctx.state)
+          newChild = renderWithContext(newChild, spawn(ctx, newChild.key))
         }
 
         newChild = toNode(newChild)
@@ -393,7 +405,7 @@ function unwrap (component, ctx) {
           ctx.onupdate = () => value
         }
         if (value instanceof Component) {
-          value = unwrap(value, ctx.spawn(value.key))
+          value = unwrap(value, spawn(ctx, value.key))
         }
         return value
       }
@@ -573,20 +585,6 @@ export class Partial {
   get template () {
     return parse(this.strings, this.isSVG)
   }
-
-  /**
-   * Render partial to Node
-   * @param {object} [state={}] Initial state
-   * @returns {Node}
-   * @memberof Partial
-   */
-  render (state = {}) {
-    const ctx = new Context(this.key, state)
-    const node = render(this.template, ctx)
-    ctx.update(this)
-    cache.set(node, ctx)
-    return node
-  }
 }
 
 /**
@@ -613,18 +611,32 @@ Component.prototype = Object.create(Partial.prototype)
 Component.prototype.constructor = Component
 
 /**
- * Render component to node
- * @param {object} [state={}] Initial state
+ * Render partial to node with supplied context
+ * @param {Partial} partial The partial to render
+ * @param {Context} ctx The node contextot be used
  * @returns {Node}
  */
-Component.prototype.render = function (state = {}) {
-  const ctx = new Context(this.key, state)
-  const partial = unwrap(this, ctx)
-  if (!(partial instanceof Partial)) return toNode(partial)
-  const node = render(partial.template, ctx)
+function renderWithContext (partial, ctx) {
+  if (partial instanceof Component) {
+    partial = unwrap(partial, ctx)
+    if (!(partial instanceof Partial)) return toNode(partial)
+  }
+  const node = renderTemplate(partial.template, ctx)
   ctx.update(partial)
   cache.set(node, ctx)
   return node
+}
+
+/**
+ * Create a new Context inheriting from given parent Context
+ * @param {Context} parent Parent context
+ * @param {any} key Partial key
+ * @returns {Context}
+ */
+function spawn (parent, key) {
+  const ctx = new Context(key, Object.create(parent.state))
+  ctx.emitter.on('*', parent.emit)
+  return ctx
 }
 
 /**
@@ -654,10 +666,6 @@ class Context {
     this.emit = this.emitter.emit.bind(this.emitter)
   }
 
-  spawn (key) {
-    return new Context(key, Object.create(this.state))
-  }
-
   /**
    * Update node with registered editors
    * @param {Partial} partial The partial to use for update
@@ -674,7 +682,7 @@ class Context {
           if (value instanceof Partial) {
             if (next) this.hooks.unshift([id, next])
             if (value instanceof Component) {
-              value = unwrap(value, this.spawn(value.key))
+              value = unwrap(value, spawn(this, value.key))
             }
             return value
           }

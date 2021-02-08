@@ -1,6 +1,6 @@
 import { suite } from 'uvu'
 import * as assert from 'uvu/assert'
-import { Partial, Component, use } from '../../../index.js'
+import { Partial, Component, html, use, render } from '../../../index.js'
 
 const component = suite('component')
 const args = suite('arguments')
@@ -19,7 +19,7 @@ component('is infinite function', function () {
 
 args('should be function', function () {
   const Main = Component(null)
-  assert.throws(() => Main.render())
+  assert.throws(() => render(Main))
 })
 
 args('inital arguments', function () {
@@ -27,7 +27,7 @@ args('inital arguments', function () {
     assert.type(state, 'object')
     assert.type(emit, 'function')
   })
-  MyComponent('test').render()
+  render(MyComponent('test'))
 })
 
 args('are forwarded', function () {
@@ -36,16 +36,26 @@ args('are forwarded', function () {
       assert.is(str, 'test')
     }
   })
-  MyComponent('test').render()
+  render(MyComponent('test'))
 })
 
 state('is inherited', function () {
-  Component(function (rootState, emit) {
-    return Component(function (innerState, emit) {
-      assert.is.not(innerState, rootState)
-      assert.ok(Object.isPrototypeOf.call(rootState, innerState))
-    })
-  }).render()
+  render(html`
+    <div>
+      ${Component(function (rootState, emit) {
+        return function () {
+          return html`
+            <div>
+              ${Component(function (innerState, emit) {
+                assert.is.not(innerState, rootState)
+                assert.ok(Object.isPrototypeOf.call(rootState, innerState))
+              })}
+            </div>
+          `
+        }
+      })}
+    </div>
+  `)
 })
 
 state('is mutable', function () {
@@ -54,12 +64,12 @@ state('is mutable', function () {
     assert.is(state, initialState)
     state.test = 'test'
   })
-  MyComponent('test').render(initialState)
+  render(MyComponent('test'), initialState)
   assert.is(initialState.test, 'test')
 })
 
 stores('arguments', function () {
-  Component(function (rootState, emit) {
+  render(Component(function (rootState, emit) {
     use(function (innerState, emitter) {
       assert.is(innerState, rootState)
       assert.type(emitter, 'object')
@@ -67,18 +77,18 @@ stores('arguments', function () {
       assert.type(emitter.emit, 'function')
       assert.type(emitter.removeListener, 'function')
     })
-  }).render()
+  }))
 })
 
 stores('can return', function () {
-  Component(function (state, emit) {
+  render(Component(function (state, emit) {
     assert.is('test', use(() => 'test'))
-  }).render()
+  }))
 })
 
 stores('can listen for events', function () {
   let count = 0
-  Component(function (state, emit) {
+  render(Component(function (state, emit) {
     use(function (state, emitter) {
       emitter.on('test', function (value) {
         assert.is(++count, 2)
@@ -99,13 +109,45 @@ stores('can listen for events', function () {
     return function () {
       emit('test', 'value')
     }
-  }).render()
+  }))
+  assert.is(count, 2)
+})
+
+stores('events bubble', function () {
+  let count = 0
+  render(html`
+    <div>
+      ${Component(function () {
+        use(function (state, emitter) {
+          emitter.on('test', function (value) {
+            count++
+            assert.is(value, 'value')
+          })
+        })
+        return function () {
+          return html`
+            <div>
+              ${Component(function (state, emit) {
+                use(function (state, emitter) {
+                  emitter.on('test', function (value) {
+                    count++
+                    assert.is(value, 'value')
+                  })
+                })
+                emit('test', 'value')
+              })}
+            </div>
+          `
+        }
+      })}
+    </div>
+  `)
   assert.is(count, 2)
 })
 
 lifecycle('unwinds nested functions', function () {
   let depth = 0
-  Component(function (state, emit) {
+  render(Component(function (state, emit) {
     assert.is(++depth, 1)
     return function (str) {
       assert.is(++depth, 2)
@@ -113,7 +155,7 @@ lifecycle('unwinds nested functions', function () {
         assert.is(++depth, 3)
       }
     }
-  }).render()
+  }))
   assert.is(depth, 3)
 })
 

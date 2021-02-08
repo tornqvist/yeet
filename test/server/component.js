@@ -1,8 +1,12 @@
 import { suite } from 'uvu'
 import * as assert from 'uvu/assert'
-import { html, Partial, Component, use, mount } from '../../server.js'
+import { html, Partial, Component, use, mount, render, renderToStream } from '../../server.js'
 
 const api = suite('api')
+const lifecycle = suite('lifecycle')
+const rendering = suite('rendering')
+const state = suite('state')
+const stores = suite('stores')
 
 api('extends partial', function () {
   const MyComponent = Component(Function.prototype)
@@ -10,25 +14,16 @@ api('extends partial', function () {
   assert.instance(MyComponent(), Partial)
 })
 
-api('is iterable', async function () {
-  const MyComponent = Component(() => html`<div>Hello world!</div>`)
-  let string = ''
-  for await (const chunk of MyComponent()) {
-    string += chunk
-  }
-  assert.is(string, '<div>Hello world!</div>')
-})
-
 api('can render to promise', async function () {
   const MyComponent = Component(() => html`<div>Hello world!</div>`)
-  const promise = MyComponent().render()
+  const promise = render(MyComponent)
   assert.instance(promise, Promise, 'is promise')
   assert.is(await promise, '<div>Hello world!</div>')
 })
 
 api('can render to stream', async function () {
   const MyComponent = Component(() => html`<div>Hello world!</div>`)
-  const stream = MyComponent().renderToStream()
+  const stream = renderToStream(MyComponent)
   const string = await new Promise(function (resolve, reject) {
     let string = ''
     stream.on('data', function (chunk) {
@@ -45,14 +40,12 @@ api('can render to stream', async function () {
 api('can mount', async function () {
   const res = mount(Component(Main), 'body')
   assert.is(res.selector, 'body')
-  assert.is(await res.render(), '<body>Hello world!</body>')
+  assert.is(await render(res), '<body>Hello world!</body>')
 
   function Main (state, emit) {
     return html`<body>Hello world!</body>`
   }
 })
-
-const lifecycle = suite('lifecycle')
 
 lifecycle('stops at yield', async function () {
   const MyComponent = Component(Main)
@@ -61,7 +54,7 @@ lifecycle('stops at yield', async function () {
       ${MyComponent({ test: 'test' })}
     </div>
   `
-  assert.snapshot(dedent(await res.render()), dedent`
+  assert.snapshot(dedent(await render(res)), dedent`
     <div>
       <span>
         Hello world!
@@ -92,7 +85,7 @@ lifecycle('stops at yield', async function () {
 
 lifecycle('await yielded promises', async function () {
   const res = html`<div>${Component(Main)}</div>`
-  assert.is(await res.render(), '<div>Hello world!</div>')
+  assert.is(await render(res), '<div>Hello world!</div>')
 
   function Main (state, emit) {
     return function * (props) {
@@ -103,18 +96,16 @@ lifecycle('await yielded promises', async function () {
   }
 })
 
-const render = suite('render')
-
-render('return just child', async function () {
+rendering('return just child', async function () {
   const Main = Component(function () {
     return Component(function () {
       return html`<div>Hello world!</div>`
     })
   })
-  assert.is(await Main.render(), '<div>Hello world!</div>')
+  assert.is(await render(Main), '<div>Hello world!</div>')
 })
 
-render('nested component', async function () {
+rendering('nested component', async function () {
   const Main = Component(function Main (state, emit) {
     return html`
       <span>
@@ -128,7 +119,7 @@ render('nested component', async function () {
       ${Main({ test: 'test' })}
     </div>
   `
-  assert.snapshot(dedent(await res.render()), dedent`
+  assert.snapshot(dedent(await render(res)), dedent`
     <div>
       <span>
         Hello world!
@@ -146,15 +137,13 @@ render('nested component', async function () {
   }
 })
 
-const state = suite('state')
-
 state('is mutable by top level component', async function () {
   const initialState = {}
   const Mutator = Component(function (state, emit) {
     assert.is(state, initialState)
     state.test = 'test'
   })
-  await Mutator.render(initialState)
+  await render(Mutator, initialState)
   assert.equal(initialState, { test: 'test' })
 })
 
@@ -164,14 +153,14 @@ state('is not mutable by nested component', async function () {
     assert.is.not(state, initialState)
     state.test = 'test'
   })
-  await html`<div>${Mutator}</div>`.render(initialState)
+  await render(html`<div>${Mutator}</div>`, initialState)
   assert.equal(initialState, {})
 })
 
 state('is inherited from parent', async function () {
   const initialState = { test: 'test' }
   const MainComponent = Component(Main)
-  assert.is(await MainComponent.render(initialState), '<div>Hello world!</div>')
+  assert.is(await render(MainComponent, initialState), '<div>Hello world!</div>')
   assert.is(initialState.child, undefined)
 
   function Main (state, emit) {
@@ -194,11 +183,9 @@ state('is inherited from parent', async function () {
   }
 })
 
-const stores = suite('stores')
-
 stores('arguments and return', async function () {
   const MainComponent = Component(Main)
-  await MainComponent.render()
+  await render(MainComponent)
 
   function Main (state, emit) {
     const res = use(function (_state, emitter) {
@@ -213,7 +200,7 @@ stores('arguments and return', async function () {
 stores('emitter', async function () {
   let queue = 2
   const MainComponent = Component(Main)
-  await MainComponent.render()
+  await render(MainComponent)
   assert.is(queue, 0, 'all events triggered')
 
   function Main (state, emit) {
@@ -242,7 +229,7 @@ stores('emitter', async function () {
 stores('events bubble', async function () {
   let queue = 2
   const MainComponent = Component(Main)
-  await MainComponent.render()
+  await render(MainComponent)
   assert.is(queue, 0, 'all events triggered')
 
   function Main (state, emit) {
@@ -269,7 +256,7 @@ stores('events bubble', async function () {
 
 api.run()
 lifecycle.run()
-render.run()
+rendering.run()
 state.run()
 stores.run()
 

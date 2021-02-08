@@ -1,10 +1,10 @@
 import { suite } from 'uvu'
 import * as assert from 'uvu/assert'
-import { svg, html } from '../../server.js'
+import { svg, html, render } from '../../server.js'
 
-const render = suite('render')
+const rendering = suite('rendering')
 
-render('with root svg tag', async function () {
+rendering('with root svg tag', async function () {
   const res = svg`
     <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
       <circle cx="50" cy="50" r="50"/>
@@ -14,10 +14,10 @@ render('with root svg tag', async function () {
     <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
       <circle cx="50" cy="50" r="50"/>
     </svg>
-  `, dedent(await res.render()))
+  `, dedent(await render(res)))
 })
 
-render('as child of html tag', async function () {
+rendering('as child of html tag', async function () {
   const res = html`
     <div>
       ${svg`
@@ -33,10 +33,10 @@ render('as child of html tag', async function () {
         <circle cx="50" cy="50" r="50"/>
       </svg>
     </div>
-  `, dedent(await res.render()))
+  `, dedent(await render(res)))
 })
 
-render.run()
+rendering.run()
 
 function dedent (string) {
   if (Array.isArray(string)) string = string.join('')
