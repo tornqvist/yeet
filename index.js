@@ -15,7 +15,7 @@ const AFTER_RENDER = 3
 /** @type {Array<Context>} */
 const stack = []
 
-/** @type {WeakMap<Array<String>, Node>} */
+/** @type {WeakMap<Array<string>, Node>} */
 const templates = new WeakMap()
 
 /** @type {WeakMap<Node, EventHandler>} */
@@ -34,7 +34,7 @@ const { entries, assign, keys } = Object
 /**
  * Create HTML partial
  * @export
- * @param {Array<String>} strings Template literal strings
+ * @param {Array<string>} strings Template literal strings
  * @param {...any} values Template literal values
  * @returns {Partial}
  */
@@ -45,7 +45,7 @@ export function html (strings, ...values) {
 /**
  * Create SVG partial
  * @export
- * @param {Array<String>} strings Template literal strings
+ * @param {Array<string>} strings Template literal strings
  * @param {...any} values Template literal values
  * @returns {Partial}
  */
@@ -89,7 +89,7 @@ export function mount (partial, node, state = {}) {
     if (partial instanceof Component) {
       partial = unwrap(partial, ctx)
     }
-    node = renderTemplate(partial.template, ctx, node)
+    node = renderTemplate(partial, ctx, node)
   }
   ctx.update(partial)
   cache.set(node, ctx)
@@ -113,256 +113,291 @@ export function render (partial, state = {}) {
 
 /**
  * Render template, optionally canibalizing an existing node
- * @param {Node} template The desired result
+ * @param {Partial} partial The partial to render
  * @param {Context} ctx The current node context
  * @param {Node} [node] An existing element to be updated
- * @returns {Node}
+ * @returns {(Node|Placeholder)}
  */
-function renderTemplate (template, ctx, node) {
-  if (!node) {
-    node = template.cloneNode()
-  } else {
-    // Remove any events attached to element
-    if (events.has(node)) events.get(node).clear()
-    // Call unmount hooks attached to element
-    const cached = cache.get(node)
-    if (cached) {
-      for (const [id, fn] of cached.hooks) {
-        if (id === AFTER_UNMOUNT) fn()
-      }
-    }
-  }
+function renderTemplate (partial, ctx, node) {
+  const { editors } = ctx
+  const { values } = partial
 
-  const { nodeType } = node
+  return renderChild(parse(partial), node)
 
-  if (nodeType === TEXT_NODE) {
-    node.nodeValue = template.nodeValue
-    return node
-  }
-
-  if (nodeType === COMMENT_NODE) {
-    const { nodeValue } = node
-    if (PLACEHOLDER.test(nodeValue)) return new Placeholder()
-    return node
-  }
-
-  if (nodeType === ELEMENT_NODE && template.nodeType === ELEMENT_NODE) {
-    /** @type {Array<{name: String, value: String}>} */
-    const placeholders = []
-
-    /** @type {Array<String>} */
-    const fixed = []
-
-    for (const { name, value } of template.attributes) {
-      if (PLACEHOLDER.test(name)) {
-        node.removeAttribute(name)
-        placeholders.push({ name, value })
-      } else if (PLACEHOLDER.test(value)) {
-        placeholders.push({ name, value })
-      } else {
-        fixed.push(name)
+  function renderChild (template, node) {
+    if (!node) {
+      node = template.cloneNode()
+    } else {
+      // Remove any events attached to element
+      if (events.has(node)) events.get(node).clear()
+      // Call unmount hooks attached to element
+      const cached = cache.get(node)
+      if (cached) {
+        for (const [id, fn] of cached.hooks) {
+          if (id === AFTER_UNMOUNT) fn()
+        }
       }
     }
 
-    for (const name of fixed) {
-      node.setAttribute(name, template.getAttribute(name))
+    const { nodeType } = node
+
+    if (nodeType === TEXT_NODE) {
+      node.nodeValue = template.nodeValue
+      return node
     }
 
-    if (placeholders.length) {
-      ctx.editors.push(function attributeEditor (values) {
-        const attrs = placeholders.reduce(function (attrs, { name, value }) {
-          name = resolveValue(name)
-          value = resolveValue(value)
-          if (isArray(value)) {
-            attrs[name] = value.join(' ')
-          } else if (typeof name === 'object') {
-            if (isArray(name)) {
-              for (const value of name.flat()) {
-                if (typeof value === 'object') assign(attrs, value)
-                else attrs[value] = ''
-              }
-            } else {
-              assign(attrs, name)
-            }
-          } else if (name.indexOf('on') === 0) {
-            const events = new EventHandler(node)
-            events.set(name, value)
-          } else if (name === 'ref') {
-            if (typeof value === 'function') value(node)
-            else refs.set(value, node)
-          } else if (value != null) {
-            attrs[name] = value
-          }
-          return attrs
-        }, {})
+    if (nodeType === ELEMENT_NODE && template.nodeType === ELEMENT_NODE) {
+      /** @type {Array<{name: string, value: string}>} */
+      const placeholders = []
 
-        for (const [name, value] of entries(attrs)) {
-          if (name in node) node[name] = value
-          else node.setAttribute(name, value)
+      /** @type {Array<string>} */
+      const fixed = []
+
+      for (const { name, value } of template.attributes) {
+        if (PLACEHOLDER.test(name)) {
+          node.removeAttribute(name)
+          placeholders.push({ name, value })
+        } else if (PLACEHOLDER.test(value)) {
+          placeholders.push({ name, value })
+        } else {
+          fixed.push(name)
         }
+      }
 
-        const allowed = keys(attrs).concat(fixed)
-        for (const { name } of node.attributes) {
-          if (!allowed.includes(name)) {
-            if (name in node) {
-              node[name] = typeof node[name] === 'boolean' ? false : ''
-            }
-            node.removeAttribute(name)
-          }
-        }
+      for (const name of fixed) {
+        node.setAttribute(name, template.getAttribute(name))
+      }
 
-        /**
-         * Replace placeholder values with actual value
-         * @param {String} str A node property to match w/ values
-         * @returns {String}
-         */
-        function resolveValue (str) {
-          const match = str.match(PLACEHOLDER)
-          if (match && match[0] === str) {
-            return values[+match[1]]
-          }
-          return String(str).replace(PLACEHOLDERS, (_, id) => values[+id])
-        }
-      })
-    }
-  }
-
-  const children = []
-  const oldChildren = toArray(node.childNodes)
-  for (const [index, child] of template.childNodes.entries()) {
-    const oldChild = oldChildren.find((oldChild) => canMount(oldChild, child))
-    let newChild = renderTemplate(child, ctx, oldChild)
-    if (newChild instanceof Placeholder) {
-      newChild = child.cloneNode()
-      const editor = createNodeEditor(newChild, index, children)
-      ctx.editors.push(editor)
-    }
-    children.push(newChild)
-    node.appendChild(newChild)
-    if (oldChild) oldChildren.splice(oldChildren.indexOf(oldChild), 1)
-  }
-
-  for (const oldChild of oldChildren) {
-    oldChild.remove()
-  }
-
-  return node
-
-  /**
-   * Create a function which updated the element in place
-   * @param {Node} oldChild The current (placeholder) node
-   * @param {Number} index The nodes current position
-   * @param {Array<Node|[Node]>} list All sibling nodes
-   * @returns {function(Array<any>): void}
-   */
-  function createNodeEditor (oldChild, index, list) {
-    const id = +oldChild.nodeValue.match(PLACEHOLDER)[1]
-
-    return function editNode (values) {
-      let newChild = values[id]
-
-      if (isArray(newChild)) {
-        /** @type {WeakMap<any, Array<[Node, Context, Number]>>} */
-        const oldKeys = new WeakMap()
-
-        /** @type {Array<Node>} */
-        const oldChildren = isArray(oldChild) ? oldChild : [oldChild]
-
-        newChild = newChild.flat().map(function (newChild) {
-          if (newChild instanceof Partial) {
-            const candidates = oldKeys.get(newChild.key)
-
-            if (candidates?.length) {
-              // Use candidate from a previous iteration
-              const [oldChild, cached, index] = candidates.pop()
-              oldChildren.splice(index, 1)
-              cached.update(newChild)
-              return oldChild
-            }
-
-            for (const [index, child] of oldChildren.entries()) {
-              const cached = cache.get(child)
-              if (cached) {
-                // Update element in place
-                if (cached.key === newChild.key) {
-                  cached.update(newChild)
-                  oldChildren.splice(index, 1)
-                  return child
+      if (placeholders.length) {
+        editors.push(function attributeEditor (values) {
+          const attrs = placeholders.reduce(function (attrs, { name, value }) {
+            name = resolveValue(name)
+            value = resolveValue(value)
+            if (isArray(value)) {
+              attrs[name] = value.join(' ')
+            } else if (typeof name === 'object') {
+              if (isArray(name)) {
+                for (const value of name.flat()) {
+                  if (typeof value === 'object') assign(attrs, value)
+                  else attrs[value] = ''
                 }
+              } else {
+                assign(attrs, name)
+              }
+            } else if (name.indexOf('on') === 0) {
+              const events = new EventHandler(node)
+              events.set(name, value)
+            } else if (name === 'ref') {
+              if (typeof value === 'function') value(node)
+              else refs.set(value, node)
+            } else if (value != null) {
+              attrs[name] = value
+            }
+            return attrs
+          }, {})
 
-                // Store candidate for subsequent iterations
-                const candidate = [child, cached, index]
-                if (candidates) candidates.push(candidate)
-                else oldKeys.set(cached.key, [candidate])
+          for (const [name, value] of entries(attrs)) {
+            if (name in node) node[name] = value
+            else node.setAttribute(name, value)
+          }
+
+          const allowed = keys(attrs).concat(fixed)
+          for (const { name } of node.attributes) {
+            if (!allowed.includes(name)) {
+              if (name in node) {
+                node[name] = typeof node[name] === 'boolean' ? false : ''
+              }
+              node.removeAttribute(name)
+            }
+          }
+
+          /**
+           * Replace placeholder values with actual value
+           * @param {string} str A node property to match w/ values
+           * @returns {string}
+           */
+          function resolveValue (str) {
+            const match = str.match(PLACEHOLDER)
+            if (match && match[0] === str) {
+              return values[+match[1]]
+            }
+            return String(str).replace(PLACEHOLDERS, (_, id) => values[+id])
+          }
+        })
+      }
+    }
+
+    /** @type {Array<Node>} */
+    const children = []
+
+    /** @type {Array<Node>} */
+    const oldChildren = toArray(node.childNodes)
+
+    for (const [index, child] of template.childNodes.entries()) {
+      let oldChild, newChild
+      if (isPlaceholderNode(child)) {
+        const id = getPlaceholderId(child)
+        const value = values[id]
+        if (value instanceof Partial) {
+          for (const child of oldChildren) {
+            const ctx = cache.get(child)
+            if (ctx?.key === value.key) {
+              editors.push(createNodeEditor(child, id, index, children))
+              oldChild = newChild = child
+              break
+            }
+          }
+        }
+        if (!newChild) {
+          newChild = child.cloneNode()
+          editors.push(createNodeEditor(newChild, id, index, children))
+        }
+      } else {
+        oldChild = oldChildren.find((oldChild) => canMount(child, oldChild))
+        newChild = renderChild(child, oldChild)
+      }
+
+      // Cache node in list of children
+      children.push(newChild)
+
+      // Put child in place
+      insert(index, newChild)
+
+      // Drop oldChild from list of candidate nodes
+      if (oldChild) oldChildren.splice(oldChildren.indexOf(oldChild), 1)
+    }
+
+    remove(oldChildren.filter(Boolean))
+
+    return node
+
+    /**
+     * Insert child at index
+     * @param {number} index Position of child
+     * @param {Node} child The child to insert
+     */
+    function insert (index, child) {
+      if (node.childNodes[index] === child) return
+      if (index) children[index - 1].after(child)
+      else if (node.firstChild) node.firstChild.before(child)
+      else node.appendChild(child)
+    }
+
+    /**
+     * Create a function which updated the element in place
+     * @param {Node} oldChild The current child node
+     * @param {number} id The partial id (positional index)
+     * @param {Number} index The nodes current position
+     * @param {Array<Node|Array<Node>>} list All sibling nodes
+     * @returns {function(Array<any>): void}
+     */
+    function createNodeEditor (oldChild, id, index, list) {
+      return function editNode (values) {
+        let newChild = values[id]
+
+        if (isArray(newChild)) {
+          /** @type {WeakMap<any, Array<[Node, Context, Number]>>} */
+          const oldKeys = new WeakMap()
+
+          /** @type {Array<Node>} */
+          const oldChildren = isArray(oldChild) ? oldChild : [oldChild]
+
+          newChild = newChild.flat().map(function (newChild) {
+            if (newChild instanceof Partial) {
+              const candidates = oldKeys.get(newChild.key)
+
+              if (candidates?.length) {
+                // Use candidate from a previous iteration
+                const [oldChild, cached, index] = candidates.pop()
+                oldChildren.splice(index, 1)
+                cached.update(newChild)
+                return oldChild
+              }
+
+              for (const [index, child] of oldChildren.entries()) {
+                const cached = cache.get(child)
+                if (cached) {
+                  // Update element in place
+                  if (cached.key === newChild.key) {
+                    cached.update(newChild)
+                    oldChildren.splice(index, 1)
+                    return child
+                  }
+
+                  // Store candidate for subsequent iterations
+                  const candidate = [child, cached, index]
+                  if (candidates) candidates.push(candidate)
+                  else oldKeys.set(cached.key, [candidate])
+                }
+              }
+
+              newChild = renderWithContext(newChild, spawn(ctx, newChild.key))
+            }
+
+            newChild = toNode(newChild)
+            for (const child of oldChildren) {
+              if (canMount(newChild, child)) {
+                return mount(newChild, child, ctx.state)
               }
             }
 
+            return newChild
+          })
+
+          // FIXME: probably has an impact on performance
+          const fragment = document.createDocumentFragment()
+          for (const child of newChild) {
+            if (child != null) fragment.appendChild(child)
+          }
+          insert(fragment)
+
+          remove(oldChildren)
+        } else {
+          if (oldChild) {
+            if (newChild instanceof Partial) {
+              // TODO: Test old child is array
+              const cached = cache.get(oldChild)
+              if (cached?.key === newChild.key) {
+                cached.update(newChild)
+                newChild = oldChild
+              } else {
+                newChild = renderWithContext(newChild, spawn(ctx, newChild.key))
+              }
+            }
+          } else if (newChild instanceof Partial) {
             newChild = renderWithContext(newChild, spawn(ctx, newChild.key))
           }
 
           newChild = toNode(newChild)
-          for (const child of oldChildren) {
-            if (canMount(newChild, child)) {
-              return mount(newChild, child, ctx.state)
-            }
+
+          let nextChild = newChild
+          if (newChild?.nodeType === FRAGMENT_NODE) {
+            nextChild = [...newChild.childNodes]
           }
 
-          return newChild
-        })
-
-        // FIXME: probably has an impact on performance
-        const fragment = document.createDocumentFragment()
-        for (const child of newChild) {
-          if (child != null) fragment.appendChild(child)
-        }
-        insert(fragment)
-
-        remove(oldChildren)
-      } else {
-        if (oldChild) {
-          if (newChild instanceof Partial) {
-            // TODO: Test old child is array
-            const cached = cache.get(oldChild)
-            if (cached?.key === newChild.key) {
-              cached.update(newChild)
-              newChild = oldChild
-            } else {
-              newChild = renderWithContext(newChild, spawn(ctx, newChild.key))
-            }
+          if (oldChild) {
+            if (newChild == null) remove(oldChild)
+            else replace(oldChild, newChild)
+          } else if (newChild != null) {
+            insert(toNode(newChild))
           }
-        } else if (newChild instanceof Partial) {
-          newChild = renderWithContext(newChild, spawn(ctx, newChild.key))
+
+          newChild = nextChild
         }
 
-        newChild = toNode(newChild)
-
-        let nextChild = newChild
-        if (newChild?.nodeType === FRAGMENT_NODE) {
-          nextChild = [...newChild.childNodes]
-        }
-
-        if (oldChild) {
-          if (newChild == null) remove(oldChild)
-          else replace(oldChild, newChild)
-        } else if (newChild != null) {
-          insert(toNode(newChild))
-        }
-
-        newChild = nextChild
+        oldChild = list[index] = newChild
       }
 
-      oldChild = list[index] = newChild
-    }
-
-    function insert (newChild) {
-      let next
-      for (const value of list.slice(index + 1)) {
-        if (isArray(value)) next = value.find(Boolean)
-        else next = value
-        if (value) break
+      function insert (newChild) {
+        let next
+        for (const value of list.slice(index + 1)) {
+          if (isArray(value)) next = value.find(Boolean)
+          else next = value
+          if (value) break
+        }
+        if (next) next.before(newChild)
+        else node.append(newChild)
       }
-      if (next) next.before(newChild)
-      else node.append(newChild)
     }
   }
 }
@@ -465,11 +500,11 @@ function isGenerator (obj) {
 
 /**
  * Parse template string into template element
- * @param {Array<String>} strings Template literal strings
- * @param {Boolean} [isSVG=false] Toggle parsing of SVG elements
+ * @param {Partial} partial The partial to parse
  * @returns {Node}
  */
-function parse (strings, isSVG = false) {
+function parse (partial) {
+  const { strings, isSVG } = partial
   let template = templates.get(strings)
   if (template) return template
 
@@ -556,10 +591,23 @@ function replace (value, child) {
 }
 
 /**
- * Placeholder value for a template hole
- * @class Placeholder
+ * Test whether node is a placeholder comment node
+ * @param {Node} node The node to test
+ * @returns {boolean}
  */
-class Placeholder {}
+function isPlaceholderNode (node) {
+  const { nodeValue, nodeType } = node
+  return nodeType === COMMENT_NODE && PLACEHOLDER.test(nodeValue)
+}
+
+/**
+ * Get placeholder id (positional index) from placeholder node
+ * @param {Node} node The placeholder comment node
+ * @returns {number}
+ */
+function getPlaceholderId (node) {
+  return +node.nodeValue.match(PLACEHOLDER)[1]
+}
 
 /**
  * A template partial
@@ -570,7 +618,7 @@ export class Partial {
   /**
    * Creates an instance of Partial.
    * @param {object} opts
-   * @param {Array<String>} opts.strings
+   * @param {Array<string>} opts.strings
    * @param {Array<any>} opts.values
    * @param {Boolean} opts.isSVG
    * @memberof Partial
@@ -581,16 +629,12 @@ export class Partial {
     this.values = values
     this.isSVG = isSVG
   }
-
-  get template () {
-    return parse(this.strings, this.isSVG)
-  }
 }
 
 /**
  * Creates a stateful component partial
  * @export
- * @param {function(object, function(String, ...any): any)} fn Component initialize function
+ * @param {function(object, function(string, ...any): any)} fn Component initialize function
  * @param {...args} args Arguments forwarded to component update function
  * @returns Component
  */
@@ -621,7 +665,7 @@ function renderWithContext (partial, ctx) {
     partial = unwrap(partial, ctx)
     if (!(partial instanceof Partial)) return toNode(partial)
   }
-  const node = renderTemplate(partial.template, ctx)
+  const node = renderTemplate(partial, ctx)
   ctx.update(partial)
   cache.set(node, ctx)
   return node
@@ -718,7 +762,7 @@ class Context {
 class Emitter extends Map {
   /**
    * Attach listener for event
-   * @param {String} event Event name
+   * @param {string} event Event name
    * @param {function(...any): void} fn Event listener function
    * @memberof Emitter
    */
@@ -730,7 +774,7 @@ class Emitter extends Map {
 
   /**
    * Remove given listener for event
-   * @param {String} event Event name
+   * @param {string} event Event name
    * @param {function(...any): void} fn Registered listener
    * @memberof Emitter
    */
@@ -741,7 +785,7 @@ class Emitter extends Map {
 
   /**
    * Emit event to all listeners, on this and all parent emitters
-   * @param {String} event Event name
+   * @param {string} event Event name
    * @param {...any} args Event parameters to be forwarded to listeners
    * @memberof Emitter
    */
@@ -795,7 +839,7 @@ class EventHandler extends Map {
 
   /**
    * Add event listener
-   * @param {String} key Event name
+   * @param {string} key Event name
    * @param {function(Event): any} value Event listener
    * @memberof EventHandler
    */
