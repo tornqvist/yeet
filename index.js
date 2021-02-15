@@ -351,13 +351,13 @@ function renderTemplate (partial, ctx, node) {
             return toNode(newChild)
           })
 
-          // FIXME: probably has an impact on performance
-          const fragment = document.createDocumentFragment()
+          let prev = children.slice(0, index).reverse().find(Boolean)
           for (const child of newChild) {
-            if (child != null) fragment.appendChild(child)
+            if (prev) prev.after(child)
+            else node.appendChild(child)
+            prev = child
           }
 
-          insert(fragment)
           remove(oldChildren)
         } else {
           if (oldChild && newChild instanceof Partial) {
