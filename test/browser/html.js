@@ -34,6 +34,12 @@ partial('can render string', function () {
   assert.is(res.nodeValue, 'Hello world!')
 })
 
+partial('can be comment', function () {
+  assert.is(render(html`<!--comment-->`).nodeValue, 'comment')
+  assert.is(render(html`<div><!--comment--></div>`).outerHTML, '<div><!--comment--></div>')
+  assert.is(render(html`<div><!--${'many'} ${'comments'}--></div>`).outerHTML, '<div><!--many comments--></div>')
+})
+
 partial('trim whitespace wrapping single element nodes', function () {
   const res = render(html`
     <span>

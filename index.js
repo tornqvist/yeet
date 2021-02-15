@@ -1,9 +1,11 @@
 const TAG = /<[a-z-]+ [^>]+$/i
+const COMMENT = /<!--(?!.*-->)/
 const LEADING_WHITESPACE = /^\s+(<)/
 const TRAILING_WHITESPACE = /(>)\s+$/
 const ATTRIBUTE = /<[a-z-]+[^>]*?\s+(([^\t\n\f "'>/=]+)=("|')?)?$/i
-const PLACEHOLDER = /(?:data-)?__placeholder(\d+)__/
-const PLACEHOLDERS = /(?:data-)?__placeholder(\d+)__/g
+const PLACEHOLDER_NODE = /__placeholder-node-(\d+)__/
+const PLACEHOLDER_VALUE = /__placeholder-value-(\d+)__/
+const PLACEHOLDER_VALUE_GLOBAL = /__placeholder-value-(\d+)__/g
 const TEXT_NODE = 3
 const COMMENT_NODE = 8
 const ELEMENT_NODE = 1
@@ -146,6 +148,17 @@ function renderTemplate (partial, ctx, node) {
       return node
     }
 
+    if (nodeType === COMMENT_NODE) {
+      if (PLACEHOLDER_VALUE.test(node.nodeValue)) {
+        editors.push(function (values) {
+          node.nodeValue = resolveValue(template.nodeValue, values)
+        })
+      } else {
+        node.nodeValue = template.nodeValue
+      }
+      return node
+    }
+
     if (nodeType === ELEMENT_NODE && template.nodeType === ELEMENT_NODE) {
       /** @type {Array<{name: string, value: string}>} */
       const placeholders = []
@@ -154,10 +167,10 @@ function renderTemplate (partial, ctx, node) {
       const fixed = []
 
       for (const { name, value } of template.attributes) {
-        if (PLACEHOLDER.test(name)) {
+        if (PLACEHOLDER_VALUE.test(name)) {
           node.removeAttribute(name)
           placeholders.push({ name, value })
-        } else if (PLACEHOLDER.test(value)) {
+        } else if (PLACEHOLDER_VALUE.test(value)) {
           placeholders.push({ name, value })
         } else {
           fixed.push(name)
@@ -171,8 +184,8 @@ function renderTemplate (partial, ctx, node) {
       if (placeholders.length) {
         editors.push(function attributeEditor (values) {
           const attrs = placeholders.reduce(function (attrs, { name, value }) {
-            name = resolveValue(name)
-            value = resolveValue(value)
+            name = resolveValue(name, values)
+            value = resolveValue(value, values)
             if (isArray(value)) {
               attrs[name] = value.join(' ')
             } else if (typeof name === 'object') {
@@ -209,19 +222,6 @@ function renderTemplate (partial, ctx, node) {
               }
               node.removeAttribute(name)
             }
-          }
-
-          /**
-           * Replace placeholder values with actual value
-           * @param {string} str A node property to match w/ values
-           * @returns {string}
-           */
-          function resolveValue (str) {
-            const match = str.match(PLACEHOLDER)
-            if (match && match[0] === str) {
-              return values[+match[1]]
-            }
-            return String(str).replace(PLACEHOLDERS, (_, id) => values[+id])
           }
         })
       }
@@ -281,6 +281,18 @@ function renderTemplate (partial, ctx, node) {
       if (index) children[index - 1].after(child)
       else if (node.firstChild) node.firstChild.before(child)
       else node.appendChild(child)
+    }
+
+    /**
+     * Replace placeholder values with actual value
+     * @param {string} str A node property to match w/ values
+     * @param {Array<any>} values Values to which to resolve
+     * @returns {string}
+     */
+    function resolveValue (str, values) {
+      const match = str.match(PLACEHOLDER_VALUE)
+      if (match && match[0] === str) return values[+match[1]]
+      return String(str).replace(PLACEHOLDER_VALUE_GLOBAL, (_, id) => values[+id])
     }
 
     /**
@@ -513,9 +525,9 @@ function parse (partial) {
   let html = strings.reduce(function compile (res, string, index) {
     res += string
     if (index === length - 1) return res
-    if (ATTRIBUTE.test(res)) res += `__placeholder${index}__`
-    else if (TAG.test(res)) res += `data-__placeholder${index}__`
-    else res += `<!--__placeholder${index}__-->`
+    if (ATTRIBUTE.test(res) || COMMENT.test(res)) res += `__placeholder-value-${index}__`
+    else if (TAG.test(res)) res += `__placeholder-value-${index}__`
+    else res += `<!--__placeholder-node-${index}__-->`
     return res
   }, '').replace(LEADING_WHITESPACE, '$1').replace(TRAILING_WHITESPACE, '$1')
 
@@ -532,7 +544,7 @@ function parse (partial) {
   }
 
   const { nodeType, nodeValue } = template
-  if (nodeType === COMMENT_NODE && PLACEHOLDER.test(nodeValue)) {
+  if (nodeType === COMMENT_NODE && PLACEHOLDER_NODE.test(nodeValue)) {
     template = content
   }
 
@@ -597,7 +609,7 @@ function replace (value, child) {
  */
 function isPlaceholderNode (node) {
   const { nodeValue, nodeType } = node
-  return nodeType === COMMENT_NODE && PLACEHOLDER.test(nodeValue)
+  return nodeType === COMMENT_NODE && PLACEHOLDER_NODE.test(nodeValue)
 }
 
 /**
@@ -606,7 +618,7 @@ function isPlaceholderNode (node) {
  * @returns {number}
  */
 function getPlaceholderId (node) {
-  return +node.nodeValue.match(PLACEHOLDER)[1]
+  return +node.nodeValue.match(PLACEHOLDER_NODE)[1]
 }
 
 /**
