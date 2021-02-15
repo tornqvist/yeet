@@ -117,7 +117,7 @@ export function render (partial, state = {}) {
  * Render template, optionally canibalizing an existing node
  * @param {Partial} partial The partial to render
  * @param {Context} ctx The current node context
- * @param {Node} [node] An existing element to be updated
+ * @param {Node} [node] An existing node to be updated
  * @returns {(Node|Placeholder)}
  */
 function renderTemplate (partial, ctx, node) {
@@ -331,12 +331,13 @@ function renderTemplate (partial, ctx, node) {
                 if (cached) {
                   // Update element in place
                   if (cached.key === newChild.key) {
-                    cached.update(newChild)
                     oldChildren.splice(index, 1)
+                    cached.update(newChild)
                     return child
                   }
 
                   // Store candidate for subsequent iterations
+                  /** @type {Array<[Node, Context, Number]>} */
                   const candidate = [child, cached, index]
                   if (candidates) candidates.push(candidate)
                   else oldKeys.set(cached.key, [candidate])
@@ -346,14 +347,8 @@ function renderTemplate (partial, ctx, node) {
               newChild = renderWithContext(newChild, spawn(ctx, newChild.key))
             }
 
-            newChild = toNode(newChild)
-            for (const child of oldChildren) {
-              if (canMount(newChild, child)) {
-                return mount(newChild, child, ctx.state)
-              }
-            }
-
-            return newChild
+            // TODO: Try and find a compatible non-keyed node to canibalize
+            return toNode(newChild)
           })
 
           // FIXME: probably has an impact on performance
@@ -361,8 +356,8 @@ function renderTemplate (partial, ctx, node) {
           for (const child of newChild) {
             if (child != null) fragment.appendChild(child)
           }
-          insert(fragment)
 
+          insert(fragment)
           remove(oldChildren)
         } else {
           if (oldChild) {
