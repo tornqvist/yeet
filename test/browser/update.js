@@ -80,7 +80,7 @@ types('can update from partial to array', function () {
   }
 })
 
-types.skip('can update from array to partial', function () {
+types('can update from array to partial', function () {
   const ul = document.createElement('ul')
 
   mount(main([1, 2, 3].map(child)), ul)

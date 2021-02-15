@@ -34,8 +34,3 @@ element('does update if update function provided', function () {
 })
 
 element.run()
-
-function dedent (string) {
-  if (Array.isArray(string)) string = string.join('')
-  return string.replace(/\n\s+/g, '\n').trim()
-}

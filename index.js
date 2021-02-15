@@ -360,18 +360,19 @@ function renderTemplate (partial, ctx, node) {
           insert(fragment)
           remove(oldChildren)
         } else {
-          if (oldChild) {
-            if (newChild instanceof Partial) {
-              // TODO: Test old child is array
+          if (oldChild && newChild instanceof Partial) {
+            const oldChildren = isArray(oldChild) ? oldChild : [oldChild]
+            for (const oldChild of oldChildren) {
               const cached = cache.get(oldChild)
               if (cached?.key === newChild.key) {
                 cached.update(newChild)
                 newChild = oldChild
-              } else {
-                newChild = renderWithContext(newChild, spawn(ctx, newChild.key))
+                break
               }
             }
-          } else if (newChild instanceof Partial) {
+          }
+
+          if (newChild instanceof Partial) {
             newChild = renderWithContext(newChild, spawn(ctx, newChild.key))
           }
 
