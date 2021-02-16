@@ -49,4 +49,14 @@ test('mount fragment', function () {
   assert.is(div.outerHTML, '<div>Hello <span>world!</span></div>')
 })
 
+test('mount on selector', function () {
+  const id = Math.random().toString(36).substring(2)
+  const div = document.createElement('div')
+  div.id = id
+  document.body.appendChild(div)
+  mount(html`<div>Hello world!</div>`, `#${id}`)
+  assert.is(div.outerHTML, `<div id="${id}">Hello world!</div>`)
+  div.remove()
+})
+
 test.run()

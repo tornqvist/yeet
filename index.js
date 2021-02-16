@@ -96,11 +96,12 @@ export function ref () {
  * Mount partial onto DOM node
  * @export
  * @param {Partial} partial The partial to mount
- * @param {Node} node Any compatible node
+ * @param {(Node|string)} node Any compatible node or node selector
  * @param {object} [state={}] Root state
  * @returns {Node}
  */
 export function mount (partial, node, state = {}) {
+  if (typeof node === 'string') node = document.querySelector(node)
   const { key } = partial
   let ctx = cache.get(node)
   if (ctx?.key !== key) {
