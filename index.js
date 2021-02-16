@@ -66,9 +66,16 @@ export function raw (value) {
 }
 
 /**
+ * @callback Store
+ * @param {object} state
+ * @param {Emitter} emitter
+ * @returns {any}
+ */
+
+/**
  * Register a store function to be used for current component context
  * @export
- * @param {function(object, Emitter): any} fn Store function
+ * @param {Store} fn Store function
  * @returns {any}
  */
 export function use (fn) {
@@ -650,10 +657,24 @@ export class Partial {
 }
 
 /**
+ * Emit events to subscribed stores
+ * @callback Emit
+ * @param {string} event
+ * @param {...any} args
+ */
+
+/**
+ * @callback Constructor
+ * @param {object} state
+ * @param {Emit} emit
+ * @returns {Component}
+ */
+
+/**
  * Creates a stateful component partial
  * @export
- * @param {function(object, function(string, ...any): any)} fn Component initialize function
- * @param {...args} args Arguments forwarded to component update function
+ * @param {Constructor} fn Component initialize function
+ * @param {...args} args Arguments forwarded to component render function
  * @returns Component
  */
 export function Component (fn, ...args) {

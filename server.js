@@ -16,6 +16,13 @@ let current
 const cache = new WeakMap()
 
 /**
+ * @callback Store
+ * @param {object} state
+ * @param {Emitter} emitter
+ * @returns {any}
+ */
+
+/**
  * Register a store
  * @example
  * function MyComponent (state, emit) {
@@ -25,7 +32,7 @@ const cache = new WeakMap()
  *   return (props) => html`<h1>Hello ${state.name}!</h1>`
  * }
  * @export
- * @param {function} fn A store function, will be called with state and emitter
+ * @param {Store} fn A store function
  * @returns {any}
  */
 export function use (fn) {
