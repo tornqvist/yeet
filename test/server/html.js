@@ -12,6 +12,12 @@ children('text is escaped', async function () {
   assert.is(await render(partial), '<div>&lt;script src=&quot;evil.com/xss.js&quot;&gt;&lt;/script&gt;</div>')
 })
 
+children('can be comment', async function () {
+  assert.is(await render(html`<!--comment-->`), '<!--comment-->')
+  assert.is(await render(html`<div><!--comment--></div>`), '<div><!--comment--></div>')
+  assert.is(await render(html`<div><!--${'many'} ${'comments'}--></div>`), '<div><!--many comments--></div>')
+})
+
 children('from nested partials', async function () {
   const partial = html`<div>${'Hello'} ${html`<span>world!</span>`}</div>`
   assert.is(await render(partial), '<div>Hello <span>world!</span></div>')
