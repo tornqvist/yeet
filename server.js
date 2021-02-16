@@ -57,13 +57,23 @@ export function html (strings, ...values) {
 export const svg = html
 
 /**
+ * Create raw html, bypassing escape
+ * @export
+ * @param {any} value
+ * @returns {Raw}
+ */
+export function raw (value) {
+  return new Raw(value)
+}
+
+/**
  * Declare where partial is to be mounted in DOM, useful for SSR
  * @example
  * export mount(html`<body>Hello world</body>`, 'body')
  * @export
  * @param {Partial} partial The partial to mount
  * @param {string} selector A DOM selector
- * @param {object} [state] Initial state
+ * @param {object} [state={}] Initial state
  * @returns {Partial}
  */
 export function mount (partial, selector, state = {}) {
@@ -131,6 +141,12 @@ function Context (state = {}) {
   this.state = state
   cache.set(state, this)
 }
+
+/**
+ * Holder of raw html value
+ * @class Raw
+ */
+class Raw extends String {}
 
 /**
  * Partial html content
@@ -256,8 +272,17 @@ async function * resolve (value, state) {
   if (value instanceof Partial) {
     yield * parse(value, state)
   } else {
-    yield value
+    yield value instanceof Raw ? value : escape(value)
   }
+}
+
+function escape (value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
 }
 
 function unwrap (component, state) {

@@ -56,6 +56,16 @@ export function svg (strings, ...values) {
 }
 
 /**
+ * Treat raw html string as partial, bypassing escape
+ * @export
+ * @param {any} value
+ * @returns {Partial}
+ */
+export function raw (value) {
+  return new Partial({ strings: [String(value)], values: [] })
+}
+
+/**
  * Register a store function to be used for current component context
  * @export
  * @param {function(object, Emitter): any} fn Store function
@@ -809,7 +819,7 @@ class Emitter extends Map {
  * @class Ref
  * @export
  */
-export class Ref {
+class Ref {
   get current () {
     return refs.get(this)
   }

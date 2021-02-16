@@ -1,10 +1,11 @@
 import { suite } from 'uvu'
 import * as assert from 'uvu/assert'
-import { html, ref, Partial, render } from '../../index.js'
+import { html, raw, ref, Partial, render } from '../../index.js'
 
 const partial = suite('partial')
 const attributes = suite('attributes')
 const refs = suite('ref')
+const rawPartial = suite('raw')
 const children = suite('children')
 
 partial('returned from html', function () {
@@ -32,6 +33,13 @@ partial('can render string', function () {
   const res = render(html`Hello world!`)
   assert.instance(res, window.Text)
   assert.is(res.nodeValue, 'Hello world!')
+})
+
+partial('html strings are not parsed as html', function () {
+  const res = render(html`<div>${'<script src="evil.com/xss.js"></script>'}</div>`)
+  assert.is(res.childNodes.length, 1)
+  assert.is(res.firstChild.nodeName, '#text')
+  assert.is(res.outerHTML, '<div>&lt;script src="evil.com/xss.js"&gt;&lt;/script&gt;</div>')
 })
 
 partial('can be comment', function () {
@@ -130,6 +138,14 @@ refs('can be function', function () {
   }
 })
 
+rawPartial('is not escaped', function () {
+  const res = render(html`<div>${raw('<script>alert("Hello planet!")</script>')}</div>`)
+  assert.is(res.childNodes.length, 1)
+  assert.is(res.firstChild.nodeName, 'SCRIPT')
+  assert.is(res.firstChild.innerText, 'alert("Hello planet!")')
+  assert.is(res.outerHTML, '<div><script>alert("Hello planet!")</script></div>')
+})
+
 children('from nested partials', function () {
   const res = render(html`<div>${'Hello'} ${html`<span>world!</span>`}</div>`)
   assert.is(res.childNodes.length, 3)
@@ -163,4 +179,5 @@ children('can be array of mixed content', function () {
 partial.run()
 attributes.run()
 refs.run()
+rawPartial.run()
 children.run()
