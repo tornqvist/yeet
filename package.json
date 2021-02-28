@@ -2,7 +2,8 @@
   "name": "swf",
   "description": "Smol Web Framework",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "dist/server.cjs.js",
+  "browser": "dist/browser.cjs.js",
   "type": "module",
   "exports": {
     "import": "./index.js",
@@ -10,19 +11,21 @@
     "default": "./index.js"
   },
   "scripts": {
-    "test": "uvu test/server && umu test/browser && standard"
+    "test": "uvu test/server && umu test/browser && standard",
+    "build": "npm run build:server && npm run build:browser",
+    "build:server": "rollup --no-esModule --format=cjs --file=dist/server.cjs.js server.js",
+    "build:browser": "rollup --no-esModule --format=cjs --file=dist/browser.cjs.js index.js"
   },
   "files": [
     "index.js",
-    "server.js"
+    "server.js",
+    "dist"
   ],
   "private": true,
   "author": "Carl Törnqvist <carl@tornqv.ist>",
   "license": "MIT",
-  "directories": {
-    "test": "test"
-  },
   "devDependencies": {
+    "rollup": "^2.40.0",
     "standard": "^16.0.3",
     "umu": "^0.0.2",
     "uvu": "^0.5.1"
