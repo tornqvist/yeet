@@ -113,10 +113,6 @@ export function mount (partial, node, state = {}) {
   }
   ctx.update(partial)
   cache.set(node, ctx)
-  for (const [id, fn] of ctx.hooks) {
-    if (id >= AFTER_RENDER) fn()
-    if (id === AFTER_UPDATE) raf(fn)
-  }
   return node
 }
 
@@ -452,65 +448,61 @@ function canMount (a, b) {
  */
 function unwrap (component, ctx) {
   const { fn, args } = component
-
   try {
     stack.unshift(ctx)
-
-    const { hooks } = ctx
-    return unwind(fn(ctx.state, ctx.emit), function resolve (id, value, next) {
-      console.assert(!next || !(value instanceof Promise), 'swf: Detected a promise. Async components are only supported on the server. On the client you should return a placeholder value and rerender (`emit(\'render\')`) when the promise is resolved/rejected.')
-
-      if (value instanceof Partial) {
-        if (next) hooks.unshift([id, next])
-        if (id === AFTER_UNMOUNT) {
-          ctx.onupdate = () => value
-        }
-        if (value instanceof Component) {
-          value = unwrap(value, spawn(ctx, value.key))
-        }
-        return value
-      }
-
-      if (typeof value === 'function') {
-        if (next) hooks.unshift([id, next])
-        if (id === AFTER_UNMOUNT) {
-          ctx.onupdate = value
-          return value(...args)
-        } else {
-          return value()
-        }
-      }
-
-      return next ? next(value) : value
-    })
+    return unwind(fn(ctx.state, ctx.emit), ctx, args)
   } finally {
     stack.shift(ctx)
   }
 }
 
 /**
- * Unwind nested (generator) functions yielding each time to callback function
+ * Unwind nested (generator) functions
  * @param {any} value Current value
- * @param {function(Number, any, Function?): any} resolve Function for resolving yield/return values
+ * @param {Context} ctx Current context
+ * @param {Array<any>} [args=[]] Arguments to forward
  * @param {Number} [id=AFTER_UNMOUNT] Current resolution depth
  * @returns {any}
  */
-function unwind (value, resolve, id = AFTER_UNMOUNT) {
+function unwind (value, ctx, args = [], id = AFTER_UNMOUNT) {
   while (typeof value === 'function' && !(value instanceof Component)) {
-    value = resolve(id, value)
+    value = resolve(value)
     id++
   }
 
   if (isGenerator(value)) {
     let res = value.next()
-    return resolve(id, res.value, function next (resolved) {
+    return resolve(res.value, function next (resolved) {
       res = value.next(resolved)
-      const arg = res.done ? res.value : resolve(id, res.value, next)
-      return unwind(arg, resolve, id + 1)
+      const arg = res.done ? res.value : resolve(res.value, next)
+      return unwind(arg, ctx, args, id + 1)
     })
   }
 
-  return resolve(id, value)
+  return resolve(value)
+
+  function resolve (value, next) {
+    console.assert(!next || !(value instanceof Promise), 'swf: Detected a promise. Async components are only supported on the server. On the client you should return a placeholder value and rerender (`emit(\'render\')`) when the promise is resolved/rejected.')
+
+    if (value instanceof Partial) {
+      if (next) ctx.hooks.unshift([id, next])
+      if (id === AFTER_UNMOUNT) {
+        ctx.onupdate = () => value
+      }
+      if (value instanceof Component) {
+        value = unwrap(value, spawn(ctx, value.key))
+      }
+      return value
+    }
+
+    if (typeof value === 'function') {
+      if (next) ctx.hooks.unshift([id, next])
+      if (id === AFTER_UNMOUNT) ctx.onupdate = value
+      return unwind(value(...args), ctx, args, id + 1)
+    }
+
+    return next ? next(value) : value
+  }
 }
 
 /**
@@ -741,7 +733,7 @@ class Context {
     /** @type {Array<Function>} */
     this.editors = []
 
-    /** @type {null|function(...any): any} */
+    /** @type {(null|function(...any): any)} */
     this.onupdate = null
 
     this.key = key
@@ -760,24 +752,7 @@ class Context {
       stack.unshift(this)
 
       if (partial instanceof Component) {
-        partial = unwind(this.onupdate(...partial.args), (id, value, next) => {
-          console.assert(!next || !(value instanceof Promise), 'swf: Detected a promise. Async components are only supported on the server. On the client you should return a placeholder value and rerender (`emit(\'render\')`) when the promise is resolved/rejected.')
-
-          if (value instanceof Partial) {
-            if (next) this.hooks.unshift([id, next])
-            if (value instanceof Component) {
-              value = unwrap(value, spawn(this, value.key))
-            }
-            return value
-          }
-
-          if (typeof value === 'function') {
-            if (next) this.hooks.unshift([id, next])
-            return value()
-          }
-
-          return next ? next(value) : value
-        }, AFTER_UPDATE)
+        partial = unwind(this.onupdate, this, partial.args)
       }
 
       for (const editor of this.editors) {
