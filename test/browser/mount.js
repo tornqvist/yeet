@@ -50,7 +50,7 @@ test('mount fragment', function () {
 })
 
 test('mount on selector', function () {
-  const id = Math.random().toString(36).substring(2)
+  const id = `_${Math.random().toString(36).substring(2)}`
   const div = document.createElement('div')
   div.id = id
   document.body.appendChild(div)
