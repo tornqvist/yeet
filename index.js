@@ -650,7 +650,6 @@ export class Partial {
 }
 
 /**
- * Emit events to subscribed stores
  * @callback Emit
  * @param {string} event
  * @param {...any} args
