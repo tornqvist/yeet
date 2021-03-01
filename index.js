@@ -10,9 +10,8 @@ const TEXT_NODE = 3
 const COMMENT_NODE = 8
 const ELEMENT_NODE = 1
 const FRAGMENT_NODE = 11
-const AFTER_UNMOUNT = 1
-const AFTER_UPDATE = 2
-const AFTER_RENDER = 3
+const ON_UNMOUNT = 1
+const ON_UPDATE = 2
 
 /** @type {Array<Context>} */
 const stack = []
@@ -147,12 +146,7 @@ function renderTemplate (partial, ctx, node) {
       // Remove any events attached to element
       if (events.has(node)) events.get(node).clear()
       // Call unmount hooks attached to element
-      const cached = cache.get(node)
-      if (cached) {
-        for (const [id, fn] of cached.hooks) {
-          if (id === AFTER_UNMOUNT) fn()
-        }
-      }
+      unhook(cache.get(node), false)
     }
 
     const { nodeType } = node
@@ -399,7 +393,7 @@ function renderTemplate (partial, ctx, node) {
 
           if (oldChild) {
             if (newChild == null) remove(oldChild)
-            else replace(oldChild, newChild)
+            else if (newChild !== oldChild) replace(oldChild, newChild)
           } else if (newChild != null) {
             insert(toNode(newChild))
           }
@@ -461,10 +455,10 @@ function unwrap (component, ctx) {
  * @param {any} value Current value
  * @param {Context} ctx Current context
  * @param {Array<any>} [args=[]] Arguments to forward
- * @param {Number} [id=AFTER_UNMOUNT] Current resolution depth
+ * @param {Number} [id=ON_UNMOUNT] Current resolution depth
  * @returns {any}
  */
-function unwind (value, ctx, args = [], id = AFTER_UNMOUNT) {
+function unwind (value, ctx, args = [], id = ON_UNMOUNT) {
   while (typeof value === 'function' && !(value instanceof Component)) {
     value = resolve(value)
     id++
@@ -486,7 +480,7 @@ function unwind (value, ctx, args = [], id = AFTER_UNMOUNT) {
 
     if (value instanceof Partial) {
       if (next) ctx.hooks.unshift([id, next])
-      if (id === AFTER_UNMOUNT) {
+      if (id === ON_UNMOUNT) {
         ctx.onupdate = () => value
       }
       if (value instanceof Component) {
@@ -497,7 +491,7 @@ function unwind (value, ctx, args = [], id = AFTER_UNMOUNT) {
 
     if (typeof value === 'function') {
       if (next) ctx.hooks.unshift([id, next])
-      if (id === AFTER_UNMOUNT) ctx.onupdate = value
+      if (id === ON_UNMOUNT) ctx.onupdate = value
       return unwind(value(...args), ctx, args, id + 1)
     }
 
@@ -590,8 +584,12 @@ function toNode (value) {
  * @param {(Node|Array<Node>} value The node to remove
  */
 function remove (value) {
-  if (!isArray(value)) value.remove()
-  else for (const child of value) child.remove()
+  if (isArray(value)) {
+    for (const child of value) remove(child)
+  } else {
+    value.remove()
+    unhook(cache.get(value))
+  }
 }
 
 /**
@@ -601,10 +599,29 @@ function remove (value) {
  */
 function replace (value, child) {
   if (isArray(value)) {
-    value[0].replaceWith(child)
+    replace(value[0], child)
     remove(value.slice(1))
   } else {
     value.replaceWith(child)
+    unhook(cache.get(value))
+  }
+}
+
+/**
+ * Deplete the hooks of given context to the specified depth
+ * @param {Context} ctx Constext whose hooks to call
+ * @param {boolean} shallow Should nested contexts also be unhooked
+ * @param {number} min Lowest level hook to call
+ */
+function unhook (ctx, deep = true, min = ON_UNMOUNT) {
+  if (!ctx) return
+  for (const [id, fn] of ctx.hooks) {
+    if (id < min) continue
+    if (id === ON_UPDATE) raf(fn)
+    else fn()
+  }
+  if (deep) {
+    for (const child of ctx.children) unhook(child, deep, min)
   }
 }
 
@@ -711,6 +728,7 @@ function renderWithContext (partial, ctx) {
 function spawn (parent, key) {
   const ctx = new Context(key, Object.create(parent.state))
   ctx.emitter.on('*', parent.emit)
+  parent.children.push(ctx)
   return ctx
 }
 
@@ -726,8 +744,11 @@ class Context {
    * @memberof Context
    */
   constructor (key, state = {}) {
-    /** @type {Array<[Number, Function]>} */
+    /** @type {Array<[number, Function]>} */
     this.hooks = []
+
+    /** @type {Array<Context>} */
+    this.children = []
 
     /** @type {Array<Function>} */
     this.editors = []
@@ -758,10 +779,7 @@ class Context {
         editor(partial.values)
       }
 
-      for (const [id, fn] of this.hooks) {
-        if (id >= AFTER_RENDER) fn()
-        if (id === AFTER_UPDATE) raf(fn)
-      }
+      unhook(this, false, ON_UPDATE)
     } finally {
       stack.shift()
     }

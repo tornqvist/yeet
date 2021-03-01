@@ -207,6 +207,28 @@ lifecycle('resolves generators', async function () {
   }
 })
 
+lifecycle('children unmount w/ parent', function () {
+  let counter = 0
+  const div = document.createElement('div')
+  mount(html`<div>${Component(Parent)}</div>`, div)
+  mount(html`<div><h1>Hello world!</h1></div>`, div)
+  assert.is(counter, 2)
+
+  function * Parent () {
+    yield function () {
+      return html`<div>${Component(Child)}</div>`
+    }
+    counter++
+  }
+
+  function * Child () {
+    yield function () {
+      return html`<h1>Hello planet!</h1>`
+    }
+    counter++
+  }
+})
+
 component.run()
 args.run()
 state.run()
