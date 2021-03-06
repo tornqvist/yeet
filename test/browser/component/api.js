@@ -191,8 +191,13 @@ lifecycle('resolves generators', async function () {
     })
   })
 
-  mount(html`<div><h1>Hello world!</h1></div>`, div)
-  assert.is(unmount, 1, 'unmount called once')
+  await new Promise(function (resolve) {
+    mount(html`<div><h1>Hello world!</h1></div>`, div)
+    window.requestAnimationFrame(function () {
+      assert.is(unmount, 1, 'unmount called once')
+      resolve()
+    })
+  })
 
   function * Main (state, emit) {
     setup++
@@ -207,12 +212,18 @@ lifecycle('resolves generators', async function () {
   }
 })
 
-lifecycle('children unmount w/ parent', function () {
+lifecycle('children unmount w/ parent', async function () {
   let counter = 0
   const div = document.createElement('div')
+
   mount(html`<div>${Component(Parent)}</div>`, div)
-  mount(html`<div><h1>Hello world!</h1></div>`, div)
-  assert.is(counter, 2)
+  await new Promise(function (resolve) {
+    mount(html`<div><h1>Hello world!</h1></div>`, div)
+    window.requestAnimationFrame(function () {
+      assert.is(counter, 2)
+      resolve()
+    })
+  })
 
   function * Parent () {
     yield function () {

@@ -12,6 +12,7 @@ const ELEMENT_NODE = 1
 const FRAGMENT_NODE = 11
 const ON_UNMOUNT = 1
 const ON_UPDATE = 2
+const ON_RENDER = 3
 
 /** @type {Array<Context>} */
 const stack = []
@@ -27,6 +28,9 @@ const cache = new WeakMap()
 
 /** @type {WeakMap<Ref, Node>} */
 const refs = new WeakMap()
+
+/** @type {WeakMap<Context, any>} */
+const updaters = new WeakMap()
 
 const { requestAnimationFrame: raf } = window
 const { isArray, from: toArray } = Array
@@ -146,7 +150,7 @@ function renderTemplate (partial, ctx, node) {
       // Remove any events attached to element
       if (events.has(node)) events.get(node).clear()
       // Call unmount hooks attached to element
-      unhook(cache.get(node), false)
+      unhook(cache.get(node), ON_UNMOUNT)
     }
 
     const { nodeType } = node
@@ -477,22 +481,17 @@ function unwind (value, ctx, args = [], id = ON_UNMOUNT) {
 
   function resolve (value, next) {
     console.assert(!next || !(value instanceof Promise), 'swf: Detected a promise. Async components are only supported on the server. On the client you should return a placeholder value and rerender (`emit(\'render\')`) when the promise is resolved/rejected.')
+    const isFn = typeof value === 'function'
 
-    if (value instanceof Partial) {
+    if (value instanceof Partial || isFn) {
       if (next) ctx.hooks.unshift([id, next])
-      if (id === ON_UNMOUNT) {
-        ctx.onupdate = () => value
-      }
+      if (id === ON_UNMOUNT) updaters.set(ctx, value)
       if (value instanceof Component) {
         value = unwrap(value, spawn(ctx, value.key))
+      } else if (isFn) {
+        value = unwind(value(...args), ctx, args, id + 1)
       }
       return value
-    }
-
-    if (typeof value === 'function') {
-      if (next) ctx.hooks.unshift([id, next])
-      if (id === ON_UNMOUNT) ctx.onupdate = value
-      return unwind(value(...args), ctx, args, id + 1)
     }
 
     return next ? next(value) : value
@@ -588,7 +587,8 @@ function remove (value) {
     for (const child of value) remove(child)
   } else {
     value.remove()
-    unhook(cache.get(value))
+    unhook(cache.get(value), ON_UNMOUNT)
+    onunmount(value)
   }
 }
 
@@ -603,7 +603,20 @@ function replace (value, child) {
     remove(value.slice(1))
   } else {
     value.replaceWith(child)
-    unhook(cache.get(value))
+    unhook(cache.get(value), ON_UNMOUNT)
+    onunmount(value)
+  }
+}
+
+/**
+ * Recursively walk child nodes calling unmount hooks
+ * @param {Node} Parent node
+ */
+function onunmount (node) {
+  if (!node.childNodes) return
+  for (const child of node.childNodes) {
+    unhook(cache.get(child), ON_UNMOUNT)
+    onunmount(child)
   }
 }
 
@@ -613,15 +626,16 @@ function replace (value, child) {
  * @param {boolean} shallow Should nested contexts also be unhooked
  * @param {number} min Lowest level hook to call
  */
-function unhook (ctx, deep = true, min = ON_UNMOUNT) {
+function unhook (ctx, ...hooks) {
   if (!ctx) return
-  for (const [id, fn] of ctx.hooks) {
-    if (id < min) continue
-    if (id === ON_UPDATE) raf(fn)
-    else fn()
-  }
-  if (deep) {
-    for (const child of ctx.children) unhook(child, deep, min)
+  for (let i = 0, len = ctx.hooks.length; i < len; i++) {
+    const [id, fn] = ctx.hooks[i]
+    if (!hooks.includes(id)) continue
+    ctx.hooks.splice(i, 1)
+    if (id === ON_RENDER) fn()
+    else raf(fn)
+    len--
+    i--
   }
 }
 
@@ -728,7 +742,6 @@ function renderWithContext (partial, ctx) {
 function spawn (parent, key) {
   const ctx = new Context(key, Object.create(parent.state))
   ctx.emitter.on('*', parent.emit)
-  parent.children.push(ctx)
   return ctx
 }
 
@@ -747,14 +760,8 @@ class Context {
     /** @type {Array<[number, Function]>} */
     this.hooks = []
 
-    /** @type {Array<Context>} */
-    this.children = []
-
     /** @type {Array<Function>} */
     this.editors = []
-
-    /** @type {(null|function(...any): any)} */
-    this.onupdate = null
 
     this.key = key
     this.state = state
@@ -772,14 +779,14 @@ class Context {
       stack.unshift(this)
 
       if (partial instanceof Component) {
-        partial = unwind(this.onupdate, this, partial.args)
+        partial = unwind(updaters.get(this), this, partial.args)
       }
 
       for (const editor of this.editors) {
         editor(partial.values)
       }
 
-      unhook(this, false, ON_UPDATE)
+      unhook(this, ON_RENDER, ON_UPDATE)
     } finally {
       stack.shift()
     }
