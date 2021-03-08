@@ -10,6 +10,8 @@ const TEXT_NODE = 3
 const COMMENT_NODE = 8
 const ELEMENT_NODE = 1
 const FRAGMENT_NODE = 11
+const RENDER = 'render'
+const WILDCARD = '*'
 const ON_UNMOUNT = 1
 const ON_UPDATE = 2
 const ON_RENDER = 3
@@ -448,6 +450,7 @@ function unwrap (component, ctx) {
   const { fn, args } = component
   try {
     stack.unshift(ctx)
+    ctx.value = component
     return unwind(fn(ctx.state, ctx.emit), ctx, args)
   } finally {
     stack.shift(ctx)
@@ -659,6 +662,24 @@ function getPlaceholderId (node) {
 }
 
 /**
+ * Throttle function to only be called once every frame
+ * @param {Function} fn The function to throttle
+ * @returns {function(...any): void}
+ */
+function throttle (fn) {
+  let waiting, args
+  return function (..._args) {
+    args = _args
+    if (waiting) return
+    waiting = true
+    raf(function () {
+      fn(...args)
+      waiting = false
+    })
+  }
+}
+
+/**
  * A template partial
  * @export
  * @class Partial
@@ -741,13 +762,16 @@ function renderWithContext (partial, ctx) {
  */
 function spawn (parent, key) {
   const ctx = new Context(key, Object.create(parent.state))
-  ctx.emitter.on('*', parent.emit)
+  ctx.emitter.on(WILDCARD, function (event, ...args) {
+    if (event !== RENDER) parent.emit(event, ...args)
+  })
   return ctx
 }
 
 /**
  * Contextual data tied to a mounted node
  * @class Context
+ * @property {Partial} value The currently rendered partial
  */
 class Context {
   /**
@@ -767,6 +791,10 @@ class Context {
     this.state = state
     this.emitter = new Emitter()
     this.emit = this.emitter.emit.bind(this.emitter)
+    this.emitter.on(RENDER, throttle(() => {
+      const update = updaters.get(this)
+      this.update(update(...this.value.args))
+    }))
   }
 
   /**
@@ -779,6 +807,7 @@ class Context {
       stack.unshift(this)
 
       if (partial instanceof Component) {
+        this.value = partial
         partial = unwind(updaters.get(this), this, partial.args)
       }
 
@@ -829,7 +858,7 @@ class Emitter extends Map {
    * @memberof Emitter
    */
   emit (event, ...args) {
-    if (event !== '*') this.emit('*', event, ...args)
+    if (event !== WILDCARD) this.emit(WILDCARD, event, ...args)
     if (!this.has(event)) return
     for (const fn of this.get(event)) fn(...args)
   }
