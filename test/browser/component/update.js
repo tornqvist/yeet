@@ -1,6 +1,6 @@
 import { suite } from 'uvu'
 import * as assert from 'uvu/assert'
-import { html, mount, render, use, Component } from '../../../index.js'
+import { html, mount, render, use, Component, Lazy } from '../../../index.js'
 
 const element = suite('element')
 const rerender = suite('rerender')
@@ -112,6 +112,31 @@ rerender('update single text node', async function () {
       return html`${value}`
     }
   }
+})
+
+rerender('Lazy', async function () {
+  let done
+  const promise = new Promise(function (resolve) {
+    done = resolve
+  })
+  const res = render(html`<div>Hello ${Lazy(promise, 'world', 200)}!</div>`)
+  assert.is(res.outerHTML, '<div>Hello !</div>')
+
+  await new Promise((resolve) => setTimeout(resolve, 200))
+  await new Promise(function (resolve) {
+    window.requestAnimationFrame(function () {
+      assert.is(res.outerHTML, '<div>Hello world!</div>')
+      resolve()
+    })
+  })
+
+  done('planet')
+  await new Promise(function (resolve) {
+    window.requestAnimationFrame(function () {
+      assert.is(res.outerHTML, '<div>Hello planet!</div>')
+      resolve()
+    })
+  })
 })
 
 element.run()

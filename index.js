@@ -132,6 +132,13 @@ export function render (partial, state = {}) {
   return renderWithContext(partial, new Context(partial.key, state))
 }
 
+export function Lazy (promise, placeholder, delay) {
+  // TODO: cache promise for reccuring calls
+  if (typeof promise === 'function') promise = promise()
+  if (!(this instanceof Lazy)) return new Lazy(promise, placeholder, delay)
+  assign(this, { promise, placeholder, delay })
+}
+
 /**
  * Render template, optionally canibalizing an existing node
  * @param {Partial} partial The partial to render
@@ -318,8 +325,35 @@ function renderTemplate (partial, ctx, node) {
      * @returns {function(Array<any>): void}
      */
     function createNodeEditor (oldChild, id, index, list) {
+      let queued
+
       return function editNode (values) {
         let newChild = values[id]
+
+        if (newChild instanceof Lazy) {
+          const { promise, placeholder, delay } = newChild
+          let timeout
+
+          if (placeholder) {
+            timeout = setTimeout(function () {
+              window.requestAnimationFrame(function () {
+                values = [...values]
+                values[id] = placeholder
+                editNode(values)
+              }, delay)
+            })
+          }
+
+          queued = promise
+          promise.then(function (res) {
+            clearTimeout(timeout)
+            if (promise === queued) {
+              values = [...values]
+              values[id] = res
+              editNode(values)
+            }
+          })
+        }
 
         if (isArray(newChild)) {
           /** @type {WeakMap<any, Array<[Node, Context, Number]>>} */
