@@ -34,6 +34,9 @@ const refs = new WeakMap()
 /** @type {WeakMap<Context, any>} */
 const updaters = new WeakMap()
 
+/** @type {WeakMap<(function|Promise), any>}  */
+const promises = new WeakMap()
+
 const { requestAnimationFrame: raf } = window
 const { isArray, from: toArray } = Array
 const { entries, assign, keys } = Object
@@ -132,9 +135,10 @@ export function render (partial, state = {}) {
   return renderWithContext(partial, new Context(partial.key, state))
 }
 
-export function Lazy (promise, placeholder, delay) {
-  // TODO: cache promise for reccuring calls
+export function Lazy (promise, placeholder, delay = 200) {
+  promise = promises.get(promise) || promise
   if (typeof promise === 'function') promise = promise()
+  if (!(promise instanceof Promise)) return promise
   if (!(this instanceof Lazy)) return new Lazy(promise, placeholder, delay)
   assign(this, { promise, placeholder, delay })
 }
@@ -337,7 +341,6 @@ function renderTemplate (partial, ctx, node) {
           if (placeholder) {
             timeout = setTimeout(function () {
               window.requestAnimationFrame(function () {
-                values = [...values]
                 values[id] = placeholder
                 editNode(values)
               }, delay)
@@ -347,8 +350,8 @@ function renderTemplate (partial, ctx, node) {
           queued = promise
           promise.then(function (res) {
             clearTimeout(timeout)
+            promises.set(promise, res)
             if (promise === queued) {
-              values = [...values]
               values[id] = res
               editNode(values)
             }

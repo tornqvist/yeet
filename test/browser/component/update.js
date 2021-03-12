@@ -139,5 +139,32 @@ rerender('Lazy', async function () {
   })
 })
 
+rerender('cached promises', async function () {
+  let resolved, done
+
+  let res = render(html`<h1>Hello ${Lazy(getComponent)}!</h1>`)
+  assert.is(res.outerHTML, '<h1>Hello !</h1>')
+
+  done('planet')
+  await new Promise(function (resolve) {
+    window.requestAnimationFrame(function () {
+      assert.is(res.outerHTML, '<h1>Hello planet!</h1>')
+      resolve()
+    })
+  })
+
+  res = render(html`<h1>Hello ${Lazy(getComponent)}!</h1>`)
+  assert.is(res.outerHTML, '<h1>Hello planet!</h1>')
+
+  function getComponent () {
+    return resolved || new Promise(function (resolve) {
+      done = function (value) {
+        resolved = value
+        resolve(value)
+      }
+    })
+  }
+})
+
 element.run()
 rerender.run()
