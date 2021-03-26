@@ -224,8 +224,10 @@ function * Caffeine (state, emit) {
     emit('render')
   }
 
-  // ↓ Provide yeet with the component render function
+  // ↓ Provide yeet with the component render function and halt
   yield function * () {
+    clearTimeout(timeout)
+
     // ↓ Tell yeet to render this before continuing
     yield html`
       <p>${seconds
@@ -234,7 +236,7 @@ function * Caffeine (state, emit) {
       <button onclick=${reset}>I'm awake!</button>
     `
 
-    // ↓ Continue once the component has mounted/updated
+    // ↓ Continue here once the component has mounted/updated
     if (seconds) {
       timeout = setTimeout(function () {
         seconds--
@@ -243,7 +245,7 @@ function * Caffeine (state, emit) {
     }
   }
 
-  // ↓ Continue when removed from the DOM (only happens once)
+  // ↓ Continue here when removed from the DOM (only happens once)
   clearTimeout(timeout)
 }
 ```
@@ -284,8 +286,9 @@ function MyComponent () {
 
 If you require immediate access to the rendered element, e.g. to synchronously
 mutate or inspect the rendered element _before_ the page updates, you may yield
-yet another function. _Note: Use with causion, this may have a negative impact
-on performance._
+yet another function.
+
+_Note: Use with causion, this may have a negative impact on performance._
 
 ```js
 function MyComponent () {
@@ -426,15 +429,15 @@ markup.
 ### Node.js
 Rendering on the server supports fully asynchronous components. Whereas
 components can `yield` anything, on the client only functions and html partials
-(prduced by the `html` and `svg` tags) carry any special meaning, anything else
-yeet just ignores. However, on the server you may yield promises which yeet will
-resolve while rendering.
+(produced by the `html` and `svg` tags) carry any special meaning, anything else
+yeet just ignores. If you yield promises however, on the server, yeet will wait
+for these promises to resolve while rendering.
 
 ```js
 import { html, use } from 'yeet'
 
 function User (state, emit) {
-  const get = use(api) // ←
+  const get = use(api) // ← Register api store with component
   return function () {
     //           ↓ Expose the promise to yeet during server render
     const user = yield get(`/users/${state.user.id}`)
@@ -456,7 +459,7 @@ function api (state, emit) {
     })
 
     // Only expose the promise while server side rendering
-    return typeof window === 'undefined' ? null : promise
+    return typeof window === 'undefined' ? promise : null
   }
 }
 ```
@@ -468,30 +471,279 @@ _Coming soon…_
 The API is intentionally small.
 
 ### html
+Create html partials which can be rendered to DOM nodes (or strings in Node.js).
+
+```js
+import { html } from 'https://cdn.skypack.dev/yeet'
+
+const name = 'planet'
+html`<h1>Hello ${name}!</h1>`
+```
+
+#### Attributes
+Both literal attributes as well as dynamically "spread" attributes work. Arrays
+will be joined with an empty space (` `) to make it easier to work with many
+space separated attributes, e.g. `class`.
+
+```js
+import { html } from 'https://cdn.skypack.dev/yeet'
+
+const attrs = { disabled: true, hidden: false, placeholder: null }
+html`<input type="text" class="${['foo', 'bar']}" ${attrs}>`
+// → <input type="text" class="foo bar" disabled>
+```
+
+##### Events
+Events can be attached to elements using the standard `on`-prefix.
+
+```js
+import { html } from 'https://cdn.skypack.dev/yeet'
+
+html`<button onclick=${() => alert('You clicked me!')}>Click me!</button>`
+```
+
+#### Arrays
+If you have lists of things you want to render as elements, interpolating arrays
+work just like you'd expect.
+
+```js
+import { html } from 'https://cdn.skypack.dev/yeet'
+
+const list = [1, 2, 3]
+html`<ol>${list.map((num) => html`<li>${num}</li>`)}</ol>`
+```
+
+#### Fragments
+It's not always that you can or need to have an outer containing element.
+Rendering fragments work just like single container elements.
+
+```js
+import { html } from 'https://cdn.skypack.dev/yeet'
+
+html`
+  <h1>Hello world!</h1>
+  <p>Lorem ipsum dolor sit amet…</p>
+`
+```
 
 ### svg
+The `svg` tag is required for rendering all kinds of SVG elements, such as
+`<svg>`, `<path>`, `<circle>` etc. All the same kinds behaviors as described in
+[`html`](#html) applies to `svg`.
+
+```js
+import { svg } from 'https://cdn.skypack.dev/yeet'
+
+svg`
+  <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="50" cy="50" r="50"/>
+  </svg>
+`
+```
 
 ### raw
+If you have preformatted html that you wish to render, just interpolating them
+in the template won't work. Text that is interpolated in templates is
+automatically escaped to avoid common [XXS attacks][xxs], e.g. injecting script
+tags.
+
+```js
+import { html, raw } from 'https://cdn.skypack.dev/yeet'
+
+const content = '<strong>Hello world!</strong>'
+
+html`<div>${content}</div>`
+// → <div>&lt;strong&gt;Hello world!&lt;/strong&gt;</div>
+
+html`<div>${raw(content)}</div>`
+// → <div><strong>Hello world!</strong></div>
+```
 
 ### ref
+It's common to want to access elements in the DOM to mutate or read properties.
+For this there is the `ref` helper which, when called, will return an object
+with the property `current` which will be the currently mounted DOM node it was
+attached to.
+
+_Note: This only works in the client, `current` will never be available while
+server rendering._
+
+```js
+import { html, ref, render } from 'https://cdn.skypack.dev/yeet'
+
+const div = ref()
+render(html`<div ref=${div}>Hello planet!</div>`)
+
+div.current // ← Reference to the rendered div element
+```
 
 ### use
+Register a store to use with component. Accepts a function which will be called
+with `state` and `emitter` (an instance of [`EventEmitter`](#eventemitter)).
+Whatever is returned by the supplied function is returned by `use`. You should
+refrain from using `use` anywhere but during the component setup stage.
+
+Stores are great for sharing functionality between components. A shared store
+can be used to handle common operations on the shared state object or just to
+avoid duplicating code between components.
+
+```js
+import { html, use, ref } from 'https://cdn.skypack.dev/yeet'
+
+function Video * (state, emit) {
+  const video = ref()
+  const detach = use(pauser(video))
+
+  yield ({ src }) => html`<video src="${src}" ref=${video}></video>`
+
+  detach()
+}
+
+function pauser (video) {
+  return function (state, emitter) {
+    function onvisibilitychange () {
+      if (document.visibilityState === 'visible') {
+        video.current.play()
+      } else {
+        video.current.pause()
+      }
+    }
+
+    document.addEventListener('visibilitychange', onvisibilitychange)
+
+    return function () {
+      document.removeEventListener('visibilitychange', onvisibilitychange)
+    }
+  }
+}
+```
 
 ### mount
+Mount a given html partial on dom node. Accepts a html partial, a DOM node or
+selector and optionally a root state object.
+
+```js
+import { html, mount } from 'https://cdn.skypack.dev/yeet'
+
+mount(html`
+  <body>
+    <h1>Hello planet!</h1>
+  </body>
+`, 'body')
+```
+
+```js
+import { html, mount, Component } from 'https://cdn.skypack.dev/yeet'
+
+mount(Component(Main), document.getElementById('app'), { name: 'world' })
+
+function Main (state, emit) {
+  return html`
+    <main id="app">
+      <h1>Hello ${state.name}!</h1>
+    </main>
+  `
+}
+```
 
 ### render
+Render a partial to element (browser) or string (Node.js). On the client, render
+is sychronous and the resulting DOM node is returned. In Node.js `render` always
+returns a promise which resolves to a string. Accepts an optinoal root state
+object.
+
+```js
+import { html, render } from 'https://cdn.skypack.dev/yeet'
+
+const h1 = render(html`<h1>Hello planet!</h1>`))
+
+document.body.appendChild(h1)
+```
+
+```js
+import { html, render } from 'yeet'
+import { createServer } from 'http'
+
+createServer(async function (req, res) {
+  const body = await render(html`<body>Hello world!</body>`)
+  res.end(body)
+}).listen(8080)
+```
 
 ### renderToStream
+In Node.js you may render a partial to a readable stream.
+
+```js
+import { html, renderToStream } from 'yeet'
+import fs from 'fs'
+
+const stream = renderToStream(html`<body>Hello world!</body>`)
+
+stream.pipe(fs.createWriteStream('index.html'))
+```
 
 ### Component
+The Component function accepts a function as its first argument and any number
+of additional arguments. The additional arguments will be forwarded to the inner
+render function. The Component function returns a function which may be called
+with any number of arguments, these arguments will override whichever arguments
+were supplied prior.
+
+It is best practice to provide an object as the first render argument since the
+optional `key` property is extracted from the first render argument.
+
+```js
+import { html, render, Component } from 'https://cdn.skypack.dev/yeet'
+
+function Greeting () {
+  return function (props, name = 'world') {
+    return html`<p>${props?.phrase || 'Hello'} ${name}!</p>`
+  }
+}
+
+render(Component(Greeting))
+// → <p>Hello world!</p>
+
+render(Component(Greeting, { phrase: 'Hi' }))
+// → <p>Hi world!</p>
+
+render(Component(Greeting, { phrase: 'Howdy' }, 'planet'))
+// → <p>Howdy planet!</p>
+
+const Greeter = Component(Greeting)
+render(Greeter({ phrase: 'Nice to meet you' }))
+// → <p>Nice to meet you world!</p>
+```
 
 ### EventEmitter
+Stores are called with state and an event emitter. The event emitter can be used
+to act on events submitted from e.g. user actions. All events except the
+`render` even bubbles up the component tree.
+
+You can register a catch-all event listerner by attaching a listener for the `*`
+event. The first argument to catch-all listeners is the event name followed by
+the event arguments.
+
+```js
+emitter.on('*', function (event, ...args) {
+  console.log(`Emitted event "${event}" with arguments:`, ...args)
+})
+```
+
+#### `emitter.on(string, Function)`
+Attach listener for the specified event name.
+
+#### `emitter.removeListener(string, Function)`
+Remove the event listener for the specified event name.
+
+#### `emitter.emit(string, ...any)`
+Emit an event of the specified name accompanied by any number of arguments.
 
 ## Attribution
 There wouldn't be a yeet if there hadn't been a [choo][choo]. Yeet borrows a lot
 of the core concepts such as a shared state and event emitter from choo. The
-idea of yeet was born from proof of conept work done by
-[Renée Kooi][goto-bus-stop].
+idea of performant DOM updates based on template litterals was born from proof
+of conept work done by [Renée Kooi][goto-bus-stop].
 
 ## TODO
 [ ] Server rendered templates (non-Node.js)
@@ -500,3 +752,4 @@ idea of yeet was born from proof of conept work done by
 [goto-bus-stop]: https://github.com/goto-bus-stop
 [Object prototypes]: https://developer.mozilla.org/en-US/docs/Learn/JavaScript/Objects/Object_prototypes
 [generator functions]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/function*
+[xxs]: https://en.wikipedia.org/wiki/Cross-site_scripting
