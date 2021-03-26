@@ -1,6 +1,6 @@
 {
-  "name": "swf",
-  "description": "Smol Web Framework",
+  "name": "yeet",
+  "description": "A teeny-weeny frontend framework for creating websites",
   "version": "1.0.0",
   "main": "dist/server.cjs.js",
   "browser": "dist/browser.cjs.js",

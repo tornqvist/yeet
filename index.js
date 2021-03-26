@@ -520,7 +520,7 @@ function unwind (value, ctx, args = [], id = ON_UNMOUNT) {
   return resolve(value)
 
   function resolve (value, next) {
-    console.assert(!next || !(value instanceof Promise), 'swf: Detected a promise. Async components are only supported on the server. On the client you should return a placeholder value and rerender (`emit(\'render\')`) when the promise is resolved/rejected.')
+    console.assert(!next || !(value instanceof Promise), 'yeet: Detected a promise. Async components are only supported on the server. On the client you should return a placeholder value and rerender (`emit(\'render\')`) when the promise is resolved/rejected.')
     const isFn = typeof value === 'function'
 
     if (value instanceof Partial || isFn) {
@@ -571,7 +571,7 @@ function parse (partial) {
   }, '').replace(LEADING_WHITESPACE, '$1').replace(TRAILING_WHITESPACE, '$1')
 
   if (isSVG) html = `<svg>${html}</svg>`
-  else console.assert(!html.includes('<svg'), 'swf: It looks likes you\'re trying to render an svg element with the html tag, use the svg tag instead')
+  else console.assert(!html.includes('<svg'), 'yeet: It looks likes you\'re trying to render an svg element with the html tag, use the svg tag instead')
   tmpl.innerHTML = html
 
   const { content } = tmpl

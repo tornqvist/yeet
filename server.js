@@ -226,13 +226,13 @@ async function * parse (partial, state = {}) {
     if (isAttr) {
       if (value instanceof Ref) {
         const match = REF_ATTR.exec(string)
-        console.assert(match, !match && `swf: Got a ref as value for \`${string.match(ATTRIBUTE)?.[2]}\`, use instead \`ref=\${myRef}\`.`)
+        console.assert(match, !match && `yeet: Got a ref as value for \`${string.match(ATTRIBUTE)?.[2]}\`, use instead \`ref=\${myRef}\`.`)
         yield string.replace(match[0], '')
         continue
       } else if (typeof value === 'boolean' || value == null) {
         const [, attr, name, quote] = html.match(ATTRIBUTE)
         if (attr && BOOL_PROPS.includes(name)) {
-          console.assert(!quote, quote && `swf: Boolean attribute \`${name}\` should not be quoted, use instead \`${name}=\${${JSON.stringify(value)}}\`.`)
+          console.assert(!quote, quote && `yeet: Boolean attribute \`${name}\` should not be quoted, use instead \`${name}=\${${JSON.stringify(value)}}\`.`)
           // Drop falsy boolean attributes altogether
           if (!value) yield string.slice(0, (attr.length + 1) * -1)
           // Leave only the attribute name in place for truthy attributes
