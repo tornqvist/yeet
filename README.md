@@ -1,7 +1,5 @@
-****<div align="center">
-  <h1 hidden>yeet</h1>
-  <!--<img alt="yeet" src="https://raw.githubusercontent.com/abskmj/hukum/HEAD/.images/terminal.gif">-->
-  <!--https://raw.githubusercontent.com/tornqvist/yeet/1.0.0-rc.1/.images/terminal.gif-->
+<div align="center">
+  <img alt="yeet" width="404" src="https://user-images.githubusercontent.com/985518/112662961-91d73b00-8e58-11eb-8cbe-c9e87d505c74.jpg">
   <p>Teeny-weeny front end framework </p>
   <!-- Stability -->
   <a href="https://nodejs.org/api/documentation.html#documentation_stability_index">
