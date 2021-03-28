@@ -830,8 +830,7 @@ class Context {
     this.emitter = new Emitter()
     this.emit = this.emitter.emit.bind(this.emitter)
     this.emitter.on(RENDER, throttle(() => {
-      const update = updaters.get(this)
-      this.update(update(...this.value.args))
+      this.update(this.value)
     }))
   }
 
