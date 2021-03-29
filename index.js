@@ -6,7 +6,7 @@ const ATTRIBUTE = /<[a-z-]+[^>]*?\s+(([^\t\n\f "'>/=]+)=("|')?)?$/i
 const PLACEHOLDER_NODE = /__placeholder-node-(\d+)__/
 const PLACEHOLDER_VALUE = /__placeholder-value-(\d+)__/
 const PLACEHOLDER_VALUE_GLOBAL = /__placeholder-value-(\d+)__/g
-const EVENT = /^on/
+const ON = /^on/
 const TEXT_NODE = 3
 const COMMENT_NODE = 8
 const ELEMENT_NODE = 1
@@ -223,7 +223,7 @@ function renderTemplate (partial, ctx, node) {
               } else {
                 assign(attrs, name)
               }
-            } else if (EVENT.test(name)) {
+            } else if (ON.test(name)) {
               const events = new EventHandler(node)
               events.set(name, value)
             } else if (name === 'ref') {
@@ -243,7 +243,7 @@ function renderTemplate (partial, ctx, node) {
           const allowed = keys(attrs).concat(fixed)
           for (const { name } of node.attributes) {
             if (!allowed.includes(name)) {
-              if (name in node && !EVENT.test(name)) {
+              if (name in node && !ON.test(name)) {
                 node[name] = typeof node[name] === 'boolean' ? false : ''
               }
               node.removeAttribute(name)
@@ -950,7 +950,7 @@ class EventHandler extends Map {
    */
   set (key, value) {
     const { node } = this
-    const event = key.replace(/^on/, '')
+    const event = key.replace(ON, '')
     if (value) node.addEventListener(event, this)
     else node.removeEventListener(event, this)
     super.set(event, value)
