@@ -17,6 +17,11 @@ const ON_UNMOUNT = 1
 const ON_UPDATE = 2
 const ON_RENDER = 3
 
+/**
+ * @callback Editor
+ * @param {Array<any>} values
+ */
+
 /** @type {Array<Context>} */
 const stack = []
 
@@ -208,7 +213,10 @@ function renderTemplate (partial, ctx, node) {
       }
 
       if (placeholders.length) {
-        editors.push(function attributeEditor (values) {
+        editors.push(attributeEditor)
+
+        /** @type {Editor} */
+        function attributeEditor (values) {
           const attrs = placeholders.reduce(function (attrs, { name, value }) {
             name = resolveValue(name, values)
             value = resolveValue(value, values)
@@ -249,7 +257,7 @@ function renderTemplate (partial, ctx, node) {
               node.removeAttribute(name)
             }
           }
-        })
+        }
       }
     }
 
@@ -332,6 +340,7 @@ function renderTemplate (partial, ctx, node) {
     function createNodeEditor (oldChild, id, index, list) {
       let queued
 
+      /** @type {Editor} */
       return function editNode (values) {
         let newChild = values[id]
 
@@ -810,21 +819,17 @@ function spawn (parent, key) {
  * Contextual data tied to a mounted node
  * @class Context
  * @property {Partial} value The currently rendered partial
+ * @property {Array<[number, Function]} hooks Lifecycle hooks
+ * @property {Array<Editor>} editors Functions which update rendered Node
  */
 class Context {
   /**
-   * Creates an instance of Context.
    * @param {any} key
    * @param {object} [state={}]
-   * @memberof Context
    */
   constructor (key, state = {}) {
-    /** @type {Array<[number, Function]>} */
     this.hooks = []
-
-    /** @type {Array<Function>} */
     this.editors = []
-
     this.key = key
     this.state = state
     this.emitter = new Emitter()
