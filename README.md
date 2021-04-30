@@ -210,44 +210,6 @@ the rest of the function for later, e.g. when the component has updated or when
 it is removed from the DOM. A yeet component's lifecycle is thereby clearly laid
 out in chronological order, from top to bottom.
 
-```js
-function * Caffeine (state, emit) {
-  // ↓ Setup variables (only happens once per component lifetime)
-
-  let timeout
-  let seconds = 5
-
-  function reset () {
-    seconds = 5
-    emit('render')
-  }
-
-  // ↓ Provide yeet with the component render function and halt
-  yield function * () {
-    clearTimeout(timeout)
-
-    // ↓ Tell yeet to render this before continuing
-    yield html`
-      <p>${seconds
-        ? `Click the button within ${seconds} seconds.`
-        : 'Did you fall asleep?'}</p>
-      <button onclick=${reset}>I'm awake!</button>
-    `
-
-    // ↓ Continue here once the component has mounted/updated
-    if (seconds) {
-      timeout = setTimeout(function () {
-        seconds--
-        emit('render')
-      }, 1000)
-    }
-  }
-
-  // ↓ Continue here when removed from the DOM (only happens once)
-  clearTimeout(timeout)
-}
-```
-
 #### Lifecycle
 Generators are used to declare the lifecycle of yeet components. Only functions
 and html partials (returned by the `html` and `svg` tags) carry any special
