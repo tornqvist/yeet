@@ -24,6 +24,10 @@ export function html (strings, ...values) {
   return new Partial(strings, values)
 }
 
+export function ref () {
+  return new Ref()
+}
+
 export function render (partial, state = {}) {
   return mount(null, partial, state)
 }
@@ -432,6 +436,17 @@ function Context (key, state = {}) {
   this.stack = [this]
   this.emitter = new Emitter()
   this.emit = this.emitter.emit.bind(this.emitter)
+}
+
+/**
+ * Reference a mounted node via ref#current
+ * @class Ref
+ * @export
+ */
+class Ref {
+  get current () {
+    return refs.get(this)
+  }
 }
 
 /**
