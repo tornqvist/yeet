@@ -224,10 +224,10 @@ function unwrap (value, root, child, index = 0) {
   const current = root.stack[index]
   const render = fn(current.state, current.emit)
 
-  current.emitter.on(RENDER, () => onupdate(args))
+  current.emitter.on(RENDER, onupdate)
   current.editors.push(function editor (component) {
     args = component.args
-    onupdate(args)
+    onupdate()
   })
 
   value = render(...args)
