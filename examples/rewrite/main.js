@@ -2,19 +2,12 @@ import './style.css'
 import { html, render, mount, Component } from './lib.js'
 
 const target = document.getElementById('app')
-let rerender
 
 main('world')
 
-const world = render(html`<button>world</button>`)
-const planet = render(html`<button>planet</button>`)
-const none = render(html`<button>null</button>`)
-const rerenderer = render(html`<button>Rerednder</button>`)
-
-world.onclick = () => main('world')
-planet.onclick = () => main('planet')
-none.onclick = () => main(null)
-rerenderer.onclick = () => rerender()
+const world = render(html`<button onclick=${() => main('world')}>world</button>`)
+const planet = render(html`<button onclick=${() => main('planet')}>planet</button>`)
+const none = render(html`<button onclick=${() => main(null)}>null</button>`)
 
 document.body.append(world, planet, none)
 
@@ -26,20 +19,31 @@ function main (name) {
   `)
 }
 
-function Greeting (ctx) {
-  console.log(ctx)
+function Greeting (state, emit) {
   return function (name) {
-    // return html`<h1>Hello ${name}</h1>`
-    switch (name) {
-      case 'world': // return html`<h1>Hello ${name}</h1>`
-      case 'planet': return new Component(Child, name)
-      default: return html`<p>Nothing here</p>`
-    }
+    if (!name) return html`<p>Nothing here</p>`
+    return new Component(Child, name)
   }
 }
 
-function Child () {
+function Child (state, emit) {
+  let isOpen = false
   return function (name) {
-    return html`<h1>Hello ${name}</h1>`
+    return html`
+      <details open=${isOpen} ontoggle=${ontoggle}>
+        <summary>Hello ${name}</summary>
+        <p>Lorem ipsum dolor sit amet</p>
+        <button onclick=${onclick}>Close</button>
+      </details>
+    `
+  }
+
+  function ontoggle () {
+    isOpen = this.open
+  }
+
+  function onclick () {
+    isOpen = false
+    emit('render')
   }
 }

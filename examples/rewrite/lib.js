@@ -1,13 +1,23 @@
+const RENDER = 'render'
+const WILDCARD = '*'
 const TEXT_NODE = 3
 const ELEMENT_NODE = 1
 const COMMENT_NODE = 8
 const FRAGMENT_NODE = 11
-const PLACEHOLDER = /placeholder-(\d+)/
+const PLACEHOLDER = /(?:data-)?yeet-(\d+)/
+const TAG = /<[a-z-]+ [^>]+$/i
+const COMMENT = /<!--(?!.*-->)/
+const LEADING_WHITESPACE = /^\s+(<)/
+const TRAILING_WHITESPACE = /(>)\s+$/
+const ATTRIBUTE = /<[a-z-]+[^>]*?\s+(([^\t\n\f "'>/=]+)=("|')?)?$/i
+const ON = /^on/
 
 const { isArray } = Array
-const { assign, create } = Object
+const { assign, create, entries, keys } = Object
 const stack = []
+const refs = new WeakMap()
 const cache = new WeakMap()
+const events = new WeakMap()
 const templates = new WeakMap()
 
 export function html (strings, ...values) {
@@ -42,44 +52,121 @@ Component.prototype = create(Partial.prototype)
 Component.prototype.constructor = Component
 
 function morph (partial, ctx, node) {
-  const template = partial instanceof Partial ? parse(partial) : toNode(partial)
-  const { nodeType } = template
-
-  if (!node) node = template.cloneNode()
-  if (nodeType === TEXT_NODE || nodeType === COMMENT_NODE) {
-    node.nodeValue = template.nodeValue
-    return node
-  }
-
-  node = node.nodeType === FRAGMENT_NODE ? [...node.childNodes] : node
-
-  const children = []
   const { editors } = ctx
-  const oldChildren = isArray(node) ? node : [...node.childNodes]
-  template.childNodes.forEach(function eachChild (child, index) {
-    if (isPlaceholder(child)) {
-      const id = getPlaceholderId(child)
-      const value = partial.values[id]
-      const oldChild = pluck(value, oldChildren)
-      child = new Child(oldChild, index, children, node)
-      transform(child, value, ctx)
-      editors.push(function editor (partial) {
-        const isComponent = partial instanceof Component
-        transform(child, isComponent ? partial : partial.values[id], ctx)
-      })
-    } else {
-      const newChild = morph(child, ctx, pluck(child, oldChildren))
-      child = new Child(null, index, children, node)
-      upsert(child, newChild)
+  const template = partial instanceof Partial ? parse(partial) : toNode(partial)
+
+  return onNode(template, node)
+
+  function onNode (template, node) {
+    const { nodeType } = template
+
+    if (!node) node = template.cloneNode()
+    if (nodeType === TEXT_NODE || nodeType === COMMENT_NODE) {
+      node.nodeValue = template.nodeValue
+      return node
     }
 
-    children[index] = child
-    if (isArray(node)) node[index] = child
-  })
+    if (nodeType === ELEMENT_NODE) {
+      const editor = createAttributeEditor(template, node)
+      if (editor) {
+        editor(partial)
+        editors.push(editor)
+      }
+    }
 
-  remove(oldChildren)
+    node = node.nodeType === FRAGMENT_NODE ? [...node.childNodes] : node
 
-  return node
+    const children = []
+    const oldChildren = isArray(node) ? node : [...node.childNodes]
+    template.childNodes.forEach(function eachChild (child, index) {
+      if (isPlaceholder(child)) {
+        const id = getPlaceholderId(child)
+        const value = partial.values[id]
+        const oldChild = pluck(value, oldChildren)
+        child = new Child(oldChild, index, children, node)
+        transform(child, value, ctx)
+        editors.push(function editor (partial) {
+          const isComponent = partial instanceof Component
+          transform(child, isComponent ? partial : partial.values[id], ctx)
+        })
+      } else {
+        const newChild = onNode(child, pluck(child, oldChildren))
+        child = new Child(null, index, children, node)
+        upsert(child, newChild)
+      }
+
+      children[index] = child
+      if (isArray(node)) node[index] = child
+    })
+
+    remove(oldChildren)
+
+    return node
+  }
+}
+
+function createAttributeEditor (template, node) {
+  const placeholders = []
+  const fixed = []
+
+  for (const { name, value } of template.attributes) {
+    if (PLACEHOLDER.test(name) || PLACEHOLDER.test(value)) {
+      placeholders.push({ name, value })
+    } else {
+      fixed.push(name)
+      if (node.getAttribute(name) !== value) {
+        node.setAttribute(name, name)
+      }
+    }
+  }
+
+  if (!placeholders.length) return null
+  return function attributeEditor (partial) {
+    const attrs = placeholders.reduce(function (attrs, { name, value }) {
+      name = PLACEHOLDER.test(name)
+        ? resolvePlaceholders(name, partial.values)
+        : name
+      value = PLACEHOLDER.test(value)
+        ? resolvePlaceholders(value, partial.values)
+        : value
+      if (isArray(value)) {
+        attrs[name] = value.join(' ')
+      } else if (typeof name === 'object') {
+        if (isArray(name)) {
+          for (const value of name.flat()) {
+            if (typeof value === 'object') assign(attrs, value)
+            else attrs[value] = ''
+          }
+        } else {
+          assign(attrs, name)
+        }
+      } else if (ON.test(name)) {
+        const events = EventHandler.get(node)
+        events.set(name, value)
+      } else if (name === 'ref') {
+        if (typeof value === 'function') value(node)
+        else refs.set(value, node)
+      } else if (value != null) {
+        attrs[name] = value
+      }
+      return attrs
+    }, {})
+
+    for (const [name, value] of entries(attrs)) {
+      if (name in node) node[name] = value
+      else node.setAttribute(name, value)
+    }
+
+    const allowed = keys(attrs).concat(fixed)
+    for (const { name } of node.attributes) {
+      if (!allowed.includes(name)) {
+        if (name in node && !ON.test(name)) {
+          node[name] = typeof node[name] === 'boolean' ? false : ''
+        }
+        node.removeAttribute(name)
+      }
+    }
+  }
 }
 
 function transform (child, value, ctx) {
@@ -125,18 +212,14 @@ function transform (child, value, ctx) {
 }
 
 function unwrap (value, root, child, index = 0) {
+  let { fn, args } = value
   const current = root.stack[index]
-  const { fn, args } = value
-  const render = fn(current)
+  const render = fn(current.state, current.emit)
 
-  current.editors.push(function editor ({ args }) {
-    const value = render(...args)
-    const next = root.stack[index + 1]
-    if (next && next.key === value?.key) {
-      update(next, value)
-    } else {
-      transform(child, value, current)
-    }
+  current.emitter.on(RENDER, () => onupdate(args))
+  current.editors.push(function editor (component) {
+    args = component.args
+    onupdate(args)
   })
 
   value = render(...args)
@@ -154,6 +237,16 @@ function unwrap (value, root, child, index = 0) {
   const oldNode = pick(value)
 
   return morph(value, ctx, oldNode)
+
+  function onupdate () {
+    const value = render(...args)
+    const next = root.stack[index + 1]
+    if (next && next.key === value?.key) {
+      update(next, value)
+    } else {
+      transform(child, value, current)
+    }
+  }
 }
 
 function upsert (child, newNode) {
@@ -290,16 +383,26 @@ function isPlaceholder (node) {
   return PLACEHOLDER.test(node.nodeValue)
 }
 
+function resolvePlaceholders (str, values) {
+  const [match, id] = str.match(PLACEHOLDER)
+  if (match === str) return values[+id]
+  const pattern = new RegExp(PLACEHOLDER, 'g')
+  return str.replace(pattern, (_, id) => values[+id])
+}
+
 function parse (partial) {
   const { strings } = partial
   let template = templates.get(strings)
   if (template) return template
   const { length } = strings
-  const html = strings.reduce(function (html, str, index) {
-    html += str
-    if (index < length - 1) html += `<!--placeholder-${index}-->`
+  const html = strings.reduce(function compile (html, string, index) {
+    html += string
+    if (index === length - 1) return html
+    if (ATTRIBUTE.test(html) || COMMENT.test(html)) html += `yeet-${index}`
+    else if (TAG.test(html)) html += `data-yeet-${index}`
+    else html += `<!--yeet-${index}-->`
     return html
-  }, '').trim()
+  }, '').replace(LEADING_WHITESPACE, '$1').replace(TRAILING_WHITESPACE, '$1')
   template = document.createElement('template')
   template.innerHTML = html
   template = template.content
@@ -327,4 +430,101 @@ function Context (key, state = {}) {
   this.editors = []
   this.state = state
   this.stack = [this]
+  this.emitter = new Emitter()
+  this.emit = this.emitter.emit.bind(this.emitter)
+}
+
+/**
+ * Generic event emitter
+ * @class Emitter
+ * @extends {Map}
+ */
+class Emitter extends Map {
+  /**
+   * Attach listener for event
+   * @param {string} event Event name
+   * @param {function(...any): void} fn Event listener function
+   * @memberof Emitter
+   */
+  on (event, fn) {
+    const listeners = this.get(event)
+    if (listeners) listeners.add(fn)
+    else this.set(event, new Set([fn]))
+  }
+
+  /**
+   * Remove given listener for event
+   * @param {string} event Event name
+   * @param {function(...any): void} fn Registered listener
+   * @memberof Emitter
+   */
+  removeListener (event, fn) {
+    const listeners = this.get(event)
+    if (listeners) listeners.delete(fn)
+  }
+
+  /**
+   * Emit event to all listeners
+   * @param {string} event Event name
+   * @param {...any} args Event parameters to be forwarded to listeners
+   * @memberof Emitter
+   */
+  emit (event, ...args) {
+    if (event !== WILDCARD) this.emit(WILDCARD, event, ...args)
+    if (!this.has(event)) return
+    for (const fn of this.get(event)) fn(...args)
+  }
+}
+
+/**
+ * Implementation of EventListener
+ * @link https://developer.mozilla.org/en-US/docs/web/api/eventlistener
+ * @class EventHandler
+ * @extends {Map}
+ */
+class EventHandler extends Map {
+  /**
+   * Create a new EventHandler
+   * @param {Node} node The node onto which to attach events
+   * @memberof EventHandler
+   */
+  constructor (node) {
+    super()
+    this.node = node
+    events.set(node, this)
+  }
+
+  /**
+   * Get an existing EvetnHandler for node or create a new one
+   * @param {Node} node The node to bind listeners to
+   * @returns {EventHandler}
+   */
+  static get (node) {
+    return events.get(node) || new EventHandler(node)
+  }
+
+  /**
+   * Delegate to assigned event listener
+   * @param {Event} event
+   * @returns {any}
+   * @memberof EventHandler
+   */
+  handleEvent (event) {
+    const handle = this.get(event.type)
+    return handle.call(event.currentTarget, event)
+  }
+
+  /**
+   * Add event listener
+   * @param {string} key Event name
+   * @param {function(Event): any} value Event listener
+   * @memberof EventHandler
+   */
+  set (key, value) {
+    const { node } = this
+    const event = key.replace(ON, '')
+    if (value) node.addEventListener(event, this)
+    else node.removeEventListener(event, this)
+    super.set(event, value)
+  }
 }
