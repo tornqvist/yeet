@@ -24,6 +24,10 @@ export function html (strings, ...values) {
   return new Partial(strings, values)
 }
 
+export function svg (strings, ...values) {
+  return new Partial(strings, values, true)
+}
+
 export function ref () {
   return new Ref()
 }
@@ -395,11 +399,11 @@ function resolvePlaceholders (str, values) {
 }
 
 function parse (partial) {
-  const { strings } = partial
+  const { strings, isSVG } = partial
   let template = templates.get(strings)
   if (template) return template
   const { length } = strings
-  const html = strings.reduce(function compile (html, string, index) {
+  let html = strings.reduce(function compile (html, string, index) {
     html += string
     if (index === length - 1) return html
     if (ATTRIBUTE.test(html) || COMMENT.test(html)) html += `yeet-${index}`
@@ -407,10 +411,15 @@ function parse (partial) {
     else html += `<!--yeet-${index}-->`
     return html
   }, '').replace(LEADING_WHITESPACE, '$1').replace(TRAILING_WHITESPACE, '$1')
+  const hasSVGTag = html.startsWith('<svg')
+  if (isSVG && !hasSVGTag) html = `<svg>${html}</svg>`
   template = document.createElement('template')
   template.innerHTML = html
   template = template.content
-  if (template.childNodes.length === 1) template = template.firstChild
+  if (template.childNodes.length === 1) {
+    template = template.firstChild
+    if (isSVG && !hasSVGTag) template = template.firstChild
+  }
   templates.set(strings, template)
   return template
 }
@@ -422,7 +431,7 @@ function Child (node, index, order, parent) {
   this.parent = parent
 }
 
-function Partial (strings, values, isSVG) {
+function Partial (strings, values, isSVG = false) {
   this.key = strings
   this.strings = strings
   this.values = values
