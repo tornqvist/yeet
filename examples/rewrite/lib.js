@@ -137,9 +137,7 @@ function createAttributeEditor (template, node) {
       value = PLACEHOLDER.test(value)
         ? resolvePlaceholders(value, partial.values)
         : value
-      if (isArray(value)) {
-        attrs[name] = value.join(' ')
-      } else if (typeof name === 'object') {
+      if (typeof name === 'object') {
         if (isArray(name)) {
           for (const value of name.flat()) {
             if (typeof value === 'object') assign(attrs, value)
@@ -160,7 +158,8 @@ function createAttributeEditor (template, node) {
       return attrs
     }, {})
 
-    for (const [name, value] of entries(attrs)) {
+    for (let [name, value] of entries(attrs)) {
+      if (isArray(value)) value = value.join(' ')
       if (name in node) node[name] = value
       else node.setAttribute(name, value)
     }
