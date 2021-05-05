@@ -128,7 +128,7 @@ function createAttributeEditor (template, node) {
     } else {
       fixed.push(name)
       if (node.getAttribute(name) !== value) {
-        node.setAttribute(name, name)
+        node.setAttribute(name, value)
       }
     }
   }
