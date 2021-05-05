@@ -136,6 +136,7 @@ function createAttributeEditor (template, node) {
   for (const { name, value } of template.attributes) {
     if (PLACEHOLDER.test(name) || PLACEHOLDER.test(value)) {
       placeholders.push({ name, value })
+      node.removeAttribute(name)
     } else {
       fixed.push(name)
       if (node.getAttribute(name) !== value) {
