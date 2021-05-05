@@ -427,7 +427,7 @@ function Child (node, index, order, parent) {
   this.parent = parent
 }
 
-function Partial (strings, values, isSVG = false) {
+export function Partial (strings, values, isSVG = false) {
   this.key = strings
   this.strings = strings
   this.values = values
