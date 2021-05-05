@@ -87,10 +87,11 @@ function morph (partial, ctx, node) {
       }
     }
 
-    node = node.nodeType === FRAGMENT_NODE ? [...node.childNodes] : node
+    if (node.nodeType === FRAGMENT_NODE) node = [...node.childNodes]
+    if (node instanceof Child) node = node.node
 
     const children = []
-    const oldChildren = isArray(node) ? node : [...node.childNodes]
+    const oldChildren = isArray(node) ? [...node] : [...node.childNodes]
     template.childNodes.forEach(function eachChild (child, index) {
       if (isPlaceholder(child)) {
         const id = getPlaceholderId(child)
@@ -294,11 +295,14 @@ function upsert (child, newNode) {
     if (oldNode) {
       replace(oldNode, newNode)
     } else {
-      const prev = findPrev(index, order)
+      let prev = findPrev(index, order)
       let parent = child.parent
       while (parent instanceof Child) parent = parent.parent
       if (prev) {
+        if (prev instanceof Child) prev = prev.node
         prev.after(toNode(newNode))
+      } else if (isArray(parent)) {
+        parent[index] = newNode
       } else if (parent.firstChild !== newNode) {
         parent.prepend(toNode(newNode))
       }
@@ -333,7 +337,7 @@ function findPrev (index, list) {
 }
 
 function remove (node) {
-  if (node instanceof Child) node = node.node
+  while (node instanceof Child) node = node.node
   if (isArray(node)) node.forEach(remove)
   else if (node) node.remove()
 }
