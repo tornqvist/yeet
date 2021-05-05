@@ -41,8 +41,9 @@ export function render (partial, state = {}) {
 }
 
 export function mount (node, partial, state = {}) {
-  if (isCompatible(node, partial)) {
-    update(cache.get(node), partial)
+  const cached = cache.get(node)
+  if (cached?.key === partial.key) {
+    update(cached, partial)
     return node
   }
   const ctx = new Context(partial.key, state)
@@ -359,7 +360,7 @@ function pluck (value, list) {
     const node = child instanceof Child ? child.node : child
     if (!node) continue
     if (isArray(node) && !cache.has(node)) return pluck(value, node)
-    if (value instanceof Partial) isMatch = isCompatible(node, value)
+    if (value instanceof Partial) isMatch = cache.get(node)?.key === value.key
     else if (child === value) isMatch = true
     else isMatch = node.nodeType === (value.nodeType || TEXT_NODE)
     if (isMatch) return list.splice(i, 1)[0]
@@ -377,13 +378,6 @@ function toNode (value) {
     return fragment
   }
   return document.createTextNode(String(value))
-}
-
-function isCompatible (node, partial) {
-  const cached = cache.get(node)
-  if (!cached) return false
-  if (cached.key === partial.key) return true
-  return cached.stack.some((ctx) => ctx.key === partial.key)
 }
 
 function getPlaceholderId (node) {
