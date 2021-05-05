@@ -172,7 +172,7 @@ function createAttributeEditor (template, node) {
     const allowed = keys(attrs).concat(fixed)
     for (const { name } of node.attributes) {
       if (!allowed.includes(name)) {
-        if (name in node && !ON.test(name)) {
+        if (name in node) {
           node[name] = typeof node[name] === 'boolean' ? false : ''
         }
         node.removeAttribute(name)
