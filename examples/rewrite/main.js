@@ -8,13 +8,13 @@ main('world')
 const world = render(html`<button onclick=${() => main('world')}>world</button>`)
 const planet = render(html`<button onclick=${() => main('planet')}>planet</button>`)
 const none = render(html`<button onclick=${() => main(null)}>null</button>`)
-
 document.body.append(world, planet, none)
 
 function main (name) {
   mount(target, html`
     <div id="app">
       ${new Component(Greeting, name)}
+      <!-- name is ${name} -->
     </div>
   `)
 }
@@ -33,9 +33,10 @@ function Child (state, emit) {
       <details open=${isOpen} ontoggle=${ontoggle}>
         <summary ${{ class: ['Foo', 'bar'] }}>Hello ${name}</summary>
         ${html`
+          <p>${html`Lorem ipsum dolor sit amet`}</p>
           <p>Lorem ipsum dolor sit amet</p>
-          <p>Lorem ipsum dolor sit amet</p>
-          <p>Lorem ipsum dolor sit amet</p>
+          ${html`<!-- name is ${name} -->`}
+          <p>${html`${['Lorem ipsum ', html`<em>dolor</em>`, ' sit amet']}`}</p>
         `}
         <svg viewBox="0 0 100 100" width="100" height="100">
           ${svg`<circle r="50" cx="50" cy="50" />`}

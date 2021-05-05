@@ -385,7 +385,7 @@ function pluck (value, list) {
 function toNode (value) {
   if (!value) return null
   if (value instanceof window.Node) return value
-  if (value instanceof Child) return value.node
+  if (value instanceof Child) return toNode(value.node)
   if (isArray(value)) {
     const fragment = document.createDocumentFragment()
     for (const node of value) fragment.append(toNode(node))
@@ -428,7 +428,7 @@ function parse (partial) {
   template = document.createElement('template')
   template.innerHTML = html
   template = template.content
-  if (template.childNodes.length === 1) {
+  if (template.childNodes.length === 1 && !isPlaceholder(template.firstChild)) {
     template = template.firstChild
     if (isSVG && !hasSVGTag) template = template.firstChild
   }
