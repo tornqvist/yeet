@@ -195,7 +195,6 @@ function transform (child, value, ctx) {
       return order
     }, [])
     upsert(child, value)
-    // cache.set(value, ctx)
     return
   }
 
