@@ -28,6 +28,10 @@ export function svg (strings, ...values) {
   return new Partial(strings, values, true)
 }
 
+export function raw (value) {
+  return new Partial([String(value)], [])
+}
+
 export function ref () {
   return new Ref()
 }
