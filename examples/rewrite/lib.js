@@ -4,6 +4,7 @@ const TEXT_NODE = 3
 const ELEMENT_NODE = 1
 const COMMENT_NODE = 8
 const FRAGMENT_NODE = 11
+const PLACEHOLDER_NODE = /^yeet-\d+$/
 const PLACEHOLDER = /(?:data-)?yeet-(\d+)/
 const TAG = /<[a-z-]+ [^>]+$/i
 const COMMENT = /<!--(?!.*-->)/
@@ -68,14 +69,23 @@ function morph (partial, ctx, node) {
   const { editors } = ctx
   const template = partial instanceof Partial ? parse(partial) : toNode(partial)
 
-  return onNode(template, node)
+  return fromTemplate(template, node)
 
-  function onNode (template, node) {
+  function fromTemplate (template, node) {
     const { nodeType } = template
 
     if (!node) node = template.cloneNode()
     if (nodeType === TEXT_NODE || nodeType === COMMENT_NODE) {
-      node.nodeValue = template.nodeValue
+      const { nodeValue } = node
+      if (PLACEHOLDER.test(nodeValue)) {
+        const editor = (partial) => {
+          node.nodeValue = resolvePlaceholders(nodeValue, partial.values)
+        }
+        editor(partial)
+        editors.push(editor)
+      } else {
+        node.nodeValue = template.nodeValue
+      }
       return node
     }
 
@@ -104,7 +114,7 @@ function morph (partial, ctx, node) {
           transform(child, isComponent ? partial : partial.values[id], ctx)
         })
       } else {
-        const newChild = onNode(child, pluck(child, oldChildren))
+        const newChild = fromTemplate(child, pluck(child, oldChildren))
         child = new Child(null, index, children, node)
         upsert(child, newChild)
       }
@@ -388,7 +398,8 @@ function getPlaceholderId (node) {
 }
 
 function isPlaceholder (node) {
-  return PLACEHOLDER.test(node.nodeValue)
+  const { nodeValue, nodeType } = node
+  return nodeType === COMMENT_NODE && PLACEHOLDER_NODE.test(nodeValue)
 }
 
 function resolvePlaceholders (str, values) {
