@@ -42,6 +42,7 @@ export function render (partial, state = {}) {
 }
 
 export function mount (node, partial, state = {}) {
+  if (typeof node === 'string') node = document.querySelector(node)
   const cached = cache.get(node)
   if (cached?.key === partial.key) {
     update(cached, partial)
@@ -377,6 +378,7 @@ function pluck (value, list) {
     if (value instanceof Partial) isMatch = cache.get(node)?.key === value.key
     else if (child === value) isMatch = true
     else isMatch = node.nodeType === (value.nodeType || TEXT_NODE)
+    if (isMatch && (node.id || value.id)) isMatch = node.id === value.id
     if (isMatch) return list.splice(i, 1)[0]
   }
   return null
