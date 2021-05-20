@@ -5,16 +5,14 @@ const target = document.getElementById('app')
 
 main('world')
 
-const world = render(html`<button onclick=${() => main('world')}>world</button>`)
-const planet = render(html`<button onclick=${() => main('planet')}>planet</button>`)
-const none = render(html`<button onclick=${() => main(null)}>null</button>`)
-document.body.append(world, planet, none)
-
 function main (name) {
   mount(target, html`
     <div id="app">
       ${new Component(Greeting, name)}
       <!-- name is ${name} -->
+      <button onclick=${() => main('world')}>world</button>
+      <button onclick=${() => main('planet')}>planet</button>
+      <button onclick=${() => main(null)}>null</button>
     </div>
   `)
 }

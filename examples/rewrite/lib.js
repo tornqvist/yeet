@@ -200,14 +200,15 @@ function transform (child, value, ctx) {
   const pick = pool(child.node)
 
   if (isArray(value)) {
-    value = value.flat().reduce(function (order, value, index) {
-      let newChild = pick(value)
-      if (!newChild) newChild = new Child(null, index, order, child)
+    const newNode = value.flat().reduce(function (order, value, index) {
+      let node = pick(value)
+      if (node instanceof Child) node = node.node
+      const newChild = new Child(node, index, order, child)
       transform(newChild, value, ctx)
       order.push(newChild)
       return order
     }, [])
-    upsert(child, value)
+    upsert(child, newNode)
     return
   }
 
@@ -274,56 +275,50 @@ function unwrap (value, root, child, index = 0) {
 }
 
 function upsert (child, newNode) {
-  const { node: oldNode, index, order } = child
+  let { node: oldNode, index, order, parent } = child
 
-  if (newNode === oldNode) return
   if (isArray(newNode) && !cache.has(newNode) && oldNode) {
-    if (isArray(oldNode) && !cache.has(oldNode)) {
-      newNode.forEach(function (_node, _index) {
-        if (!_node) return
+    if (!isArray(oldNode)) oldNode = [oldNode]
+    newNode.forEach(function (_node, _index) {
+      while (_node instanceof Child) _node = _node.node
+      if (!_node) return
 
-        const oldIndex = oldNode.indexOf(_node)
-        if (oldIndex !== -1) oldNode.splice(oldIndex, 1)
-
-        let parent = child.parent
-        while (parent instanceof Child) parent = parent.parent
-
-        const prev = findPrev(_index, newNode)
-        if (_node instanceof Child) _node = _node.node
-        if (_node) {
-          if (prev && prev.nextSibling !== _node) {
-            prev.after(toNode(_node))
-          } else if (!prev && parent.firstChild !== _node) {
-            parent.prepend(toNode(_node))
-          }
-        }
+      const oldIndex = oldNode.findIndex(function (_oldNode) {
+        while (_oldNode instanceof Child) _oldNode = _oldNode.node
+        return _oldNode === _node
       })
+      if (oldIndex !== -1) oldNode.splice(oldIndex, 1)
 
-      remove(oldNode)
-    } else {
-      replace(oldNode, newNode)
-    }
+      putInPlace(_node, _index, newNode)
+    })
+
+    remove(oldNode)
   } else if (newNode) {
-    if (oldNode) {
+    if (oldNode && newNode !== oldNode) {
       replace(oldNode, newNode)
     } else {
-      let prev = findPrev(index, order)
-      let parent = child.parent
-      while (parent instanceof Child) parent = parent.parent
-      if (prev) {
-        if (prev instanceof Child) prev = prev.node
-        prev.after(toNode(newNode))
-      } else if (isArray(parent)) {
-        parent[index] = newNode
-      } else if (parent.firstChild !== newNode) {
-        parent.prepend(toNode(newNode))
-      }
+      putInPlace(newNode, index, order)
     }
   } else {
     remove(oldNode)
   }
 
   child.node = newNode
+
+  function putInPlace (newNode, index, list) {
+    let prev = findPrev(index, list)
+    while (prev instanceof Child) prev = prev.node
+    while (parent instanceof Child) parent = parent.parent
+    if (prev) {
+      if (prev.nextSibling !== newNode) {
+        prev.after(toNode(newNode))
+      }
+    } else if (isArray(parent)) {
+      parent[index] = newNode
+    } else if (parent.firstChild !== newNode) {
+      parent.prepend(toNode(newNode))
+    }
+  }
 }
 
 function update (ctx, partial) {
@@ -355,11 +350,13 @@ function remove (node) {
 }
 
 function replace (oldNode, newNode) {
+  while (oldNode instanceof Child) oldNode = oldNode.node
   if (isArray(oldNode)) {
-    oldNode = oldNode[0]
     remove(oldNode.slice(1))
+    replace(oldNode[0], newNode)
+  } else {
+    oldNode.replaceWith(toNode(newNode))
   }
-  oldNode.replaceWith(toNode(newNode))
 }
 
 function pool (nodes) {
