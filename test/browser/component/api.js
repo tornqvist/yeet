@@ -1,6 +1,6 @@
 import { suite } from 'uvu'
 import * as assert from 'uvu/assert'
-import { Partial, Component, html, use, render, mount } from '../../../index.js'
+import { Partial, Component, html, use, render, mount } from '../../../examples/rewrite/lib.js'
 
 const component = suite('component')
 const args = suite('arguments')
@@ -10,11 +10,15 @@ const lifecycle = suite('lifecycle')
 
 component('inherits partial', function () {
   assert.type(Component, 'function')
+  assert.ok(Object.isPrototypeOf.call(Partial.prototype, Component.prototype))
 })
 
-component('is infinite function', function () {
-  assert.type(Component(Function.prototype), 'function')
-  assert.instance(Component(Function.prototype), Partial)
+component('returns component object', function () {
+  const fn = Component(Function.prototype)
+  assert.type(fn, 'function')
+  const res = fn()
+  assert.instance(res, Partial)
+  assert.instance(res, Component)
 })
 
 args('should be function', function () {
@@ -167,7 +171,7 @@ lifecycle('resolves generators', async function () {
   const div = document.createElement('div')
 
   await new Promise(function (resolve, reject) {
-    mount(html`<div>${Component(Main)}</div>`, div)
+    mount(div, html`<div>${Component(Main)}</div>`)
     assert.is(setup, 1, 'setup called once')
     assert.is(update, 0, 'update not called yet')
     assert.is(render, 1, 'render called once')
@@ -180,7 +184,7 @@ lifecycle('resolves generators', async function () {
   })
 
   await new Promise(function (resolve, reject) {
-    mount(html`<div>${Component(Main)}</div>`, div)
+    mount(div, html`<div>${Component(Main)}</div>`)
     assert.is(setup, 1, 'setup still only called once')
     assert.is(update, 1, 'update still only called once')
     assert.is(render, 2, 'render called twice')
@@ -192,7 +196,7 @@ lifecycle('resolves generators', async function () {
   })
 
   await new Promise(function (resolve) {
-    mount(html`<div><h1>Hello world!</h1></div>`, div)
+    mount(div, html`<div><h1>Hello world!</h1></div>`)
     window.requestAnimationFrame(function () {
       assert.is(unmount, 1, 'unmount called once')
       resolve()
@@ -216,9 +220,9 @@ lifecycle('children unmount w/ parent', async function () {
   let counter = 0
   const div = document.createElement('div')
 
-  mount(html`<div>${Component(Parent)}</div>`, div)
+  mount(div, html`<div>${Component(Parent)}</div>`)
   await new Promise(function (resolve) {
-    mount(html`<div><h1>Hello world!</h1></div>`, div)
+    mount(div, html`<div><h1>Hello world!</h1></div>`)
     window.requestAnimationFrame(function () {
       assert.is(counter, 2)
       resolve()

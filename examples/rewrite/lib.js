@@ -11,10 +11,15 @@ const COMMENT = /<!--(?!.*-->)/
 const LEADING_WHITESPACE = /^\s+(<)/
 const TRAILING_WHITESPACE = /(>)\s+$/
 const ATTRIBUTE = /<[a-z-]+[^>]*?\s+(([^\t\n\f "'>/=]+)=("|')?)?$/i
+const HOOK = Symbol('HOOK')
 const ON = /^on/
+const ON_UNMOUNT = 0
+const ON_UPDATE = 1
+const ON_RENDER = 2
 
 const { isArray } = Array
 const { assign, create, entries, keys } = Object
+const raf = window.requestAnimationFrame
 const stack = []
 const refs = new WeakMap()
 const cache = new WeakMap()
@@ -33,6 +38,11 @@ export function raw (value) {
   return new Partial([String(value)], [])
 }
 
+export function use (fn) {
+  const { state, emitter } = stack[0]
+  return fn(state, emitter)
+}
+
 export function ref () {
   return new Ref()
 }
@@ -42,6 +52,7 @@ export function render (partial, state = {}) {
 }
 
 export function mount (node, partial, state = {}) {
+  partial = exec(partial)
   if (typeof node === 'string') node = document.querySelector(node)
   const cached = cache.get(node)
   if (cached?.key === partial.key) {
@@ -49,6 +60,10 @@ export function mount (node, partial, state = {}) {
     return node
   }
   const ctx = new Context(partial.key, state)
+  if (partial instanceof Component) {
+    partial = unwrap(partial, ctx, new Child(null, 0, [], null))
+  }
+  if (!partial) return null
   node = morph(partial, ctx, node)
   cache.set(node, ctx)
   return toNode(node)
@@ -106,11 +121,12 @@ function morph (partial, ctx, node) {
     template.childNodes.forEach(function eachChild (child, index) {
       if (isPlaceholder(child)) {
         const id = getPlaceholderId(child)
-        const value = partial.values[id]
+        const value = exec(partial.values[id])
         const oldChild = pluck(value, oldChildren)
         child = new Child(oldChild, index, children, node)
         transform(child, value, ctx)
         editors.push(function editor (partial) {
+          partial = exec(partial)
           const isComponent = partial instanceof Component
           transform(child, isComponent ? partial : partial.values[id], ctx)
         })
@@ -201,6 +217,7 @@ function transform (child, value, ctx) {
 
   if (isArray(value)) {
     const newNode = value.flat().reduce(function (order, value, index) {
+      value = exec(value)
       let node = pick(value)
       if (node instanceof Child) node = node.node
       const newChild = new Child(node, index, order, child)
@@ -223,7 +240,7 @@ function transform (child, value, ctx) {
     }
   }
 
-  if (isPartial) ctx = new Context(value.key, create(ctx.state))
+  if (isPartial) ctx = spawn(ctx, value.key)
 
   if (value instanceof Component) {
     value = unwrap(value, ctx, child)
@@ -231,47 +248,84 @@ function transform (child, value, ctx) {
     value = morph(value, ctx, oldNode)
   }
 
-  if (isPartial) cache.set(value, ctx)
+  if (value) cache.set(value, ctx)
 
   upsert(child, value)
 }
 
 function unwrap (value, root, child, index = 0) {
+  let rerender
   let { fn, args } = value
-  const current = root.stack[index]
-  const render = fn(current.state, current.emit)
+  let ctx = root.stack[index]
 
-  current.emitter.on(RENDER, onupdate)
-  current.editors.push(function editor (component) {
+  ctx.emitter.on(RENDER, onupdate)
+  ctx.editors.push(function editor (component) {
     args = component.args
     onupdate()
   })
 
-  value = render(...args)
-
-  let ctx = current
-  if (value instanceof Partial) {
-    ctx = root.stack[index + 1] = new Context(value.key, create(current.state))
+  try {
+    stack.unshift(ctx)
+    value = unwind(fn(ctx.state, ctx.emit), resolve)
+    if (value instanceof Component) {
+      while (value instanceof Component) {
+        ctx = spawn(ctx, value.key)
+        root.stack.push(ctx)
+        value = unwrap(value, root, child, index + 1)
+      }
+      return value
+    } else if (value instanceof Partial) {
+      ctx = spawn(ctx, value.key)
+      root.stack.push(ctx)
+    }
+    const pick = pool(child.node)
+    const oldNode = pick(value)
+    if (value) value = morph(value, ctx, oldNode)
+    return value
+  } finally {
+    stack.shift()
   }
-
-  if (value instanceof Component) {
-    return unwrap(value, root, child, index + 1)
-  }
-
-  const pick = pool(child.node)
-  const oldNode = pick(value)
-
-  return morph(value, ctx, oldNode)
 
   function onupdate () {
-    const value = render(...args)
+    const value = unwind(exec(rerender, ...args), resolve, ON_UPDATE)
     const next = root.stack[index + 1]
     if (next && next.key === value?.key) {
       update(next, value)
     } else {
-      transform(child, value, current)
+      transform(child, value, index ? root.stack[index - 1] : root)
     }
   }
+
+  function resolve (value, id, next) {
+    try {
+      if (id === ON_UNMOUNT) rerender = value
+      if (typeof value === 'function') {
+        // FIXME: incrementing id here does not carry over to finally block
+        return unwind(value(...args), resolve, id + 1)
+      }
+      if (value instanceof Partial) return value
+    } finally {
+      if (next) {
+        if (id === ON_UNMOUNT) ctx.emitter.emit(HOOK, once(next, value))
+        if (id === ON_RENDER) next(value)
+        if (id === ON_UPDATE) raf(() => next(value))
+      }
+    }
+    return next ? next(value) : value
+  }
+}
+
+function unwind (value, resolve, id = ON_UNMOUNT) {
+  if (isGenerator(value)) {
+    let res = value.next()
+    return resolve(res.value, id, function next (resolved) {
+      if (res.done) return
+      res = value.next(resolved)
+      const arg = res.done ? res.value : resolve(res.value, id, next)
+      return unwind(arg, resolve, id)
+    })
+  }
+  return resolve(value, id)
 }
 
 function upsert (child, newNode) {
@@ -345,8 +399,12 @@ function findPrev (index, list) {
 
 function remove (node) {
   while (node instanceof Child) node = node.node
-  if (isArray(node)) node.forEach(remove)
-  else if (node) node.remove()
+  if (isArray(node)) {
+    node.forEach(remove)
+  } else if (node) {
+    node.remove()
+    unhook(node)
+  }
 }
 
 function replace (oldNode, newNode) {
@@ -356,7 +414,15 @@ function replace (oldNode, newNode) {
     replace(oldNode[0], newNode)
   } else {
     oldNode.replaceWith(toNode(newNode))
+    unhook(oldNode)
   }
+}
+
+function unhook (node) {
+  raf(function () {
+    const cached = cache.get(node)
+    if (cached) for (const hook of cached.hooks) hook()
+  })
 }
 
 function pool (nodes) {
@@ -373,6 +439,7 @@ function pluck (value, list) {
     if (!node) continue
     if (isArray(node) && !cache.has(node)) return pluck(value, node)
     if (value instanceof Partial) isMatch = cache.get(node)?.key === value.key
+    else if (cache.has(node)) continue
     else if (child === value) isMatch = true
     else isMatch = node.nodeType === (value.nodeType || TEXT_NODE)
     if (isMatch && (node.id || value.id)) isMatch = node.id === value.id
@@ -391,6 +458,31 @@ function toNode (value) {
     return fragment
   }
   return document.createTextNode(String(value))
+}
+
+function exec (fn, ...args) {
+  return typeof fn === 'function' ? fn(...args) : fn
+}
+
+function once (fn, ...args) {
+  let done = false
+  return function () {
+    if (done) return
+    done = true
+    fn(...args)
+  }
+}
+
+function isGenerator (obj) {
+  return obj &&
+    typeof obj.next === 'function' &&
+    typeof obj.throw === 'function'
+}
+
+function spawn (parent, key) {
+  const ctx = new Context(key, create(parent.state))
+  ctx.emitter.on('*', parent.emit)
+  return ctx
 }
 
 function getPlaceholderId (node) {
@@ -451,11 +543,13 @@ export function Partial (strings, values, isSVG = false) {
 
 function Context (key, state = {}) {
   this.key = key
+  this.hooks = []
   this.editors = []
   this.state = state
   this.stack = [this]
   this.emitter = new Emitter()
   this.emit = this.emitter.emit.bind(this.emitter)
+  this.emitter.on(HOOK, (fn) => this.hooks.push(fn))
 }
 
 /**

@@ -1,5 +1,5 @@
 import './style.css'
-import { html, svg, render, mount, Component } from './lib.js'
+import { html, svg, render, mount, Component, use } from './lib.js'
 
 const target = document.getElementById('app')
 
@@ -8,7 +8,8 @@ main('world')
 function main (name) {
   mount(target, html`
     <div id="app">
-      ${new Component(Greeting, name)}
+      ${/* new Component(Greeting, name) */null}
+      <p>${html`${['Lorem ipsum ', html`<em>dolor</em>`, ' sit amet']}`}</p>
       <!-- name is ${name} -->
       <button onclick=${() => main('world')}>world</button>
       <button onclick=${() => main('planet')}>planet</button>
