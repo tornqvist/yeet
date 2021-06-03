@@ -99,7 +99,7 @@ function morph (partial, ctx, node) {
         }
         editor(partial)
         editors.push(editor)
-      } else {
+      } else if (node.nodeValue !== template.nodeValue) {
         node.nodeValue = template.nodeValue
       }
       return node
@@ -194,8 +194,11 @@ function createAttributeEditor (template, node) {
 
     for (let [name, value] of entries(attrs)) {
       if (isArray(value)) value = value.join(' ')
-      if (name in node) node[name] = value
-      else node.setAttribute(name, value)
+      if (name in node) {
+        node[name] = value
+      } else if (node.getAttribute(name) !== value) {
+        node.setAttribute(name, value)
+      }
     }
 
     const allowed = keys(attrs).concat(fixed)
