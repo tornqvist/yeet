@@ -8,8 +8,7 @@ main('world')
 function main (name) {
   mount(target, html`
     <div id="app">
-      ${/* new Component(Greeting, name) */null}
-      <p>${html`${['Lorem ipsum ', html`<em>dolor</em>`, ' sit amet']}`}</p>
+      ${new Component(Greeting, name)}
       <!-- name is ${name} -->
       <button onclick=${() => main('world')}>world</button>
       <button onclick=${() => main('planet')}>planet</button>
@@ -32,7 +31,7 @@ function Child (state, emit) {
       <details open=${isOpen} ontoggle=${ontoggle}>
         <summary ${{ class: ['Foo', 'bar'] }}>Hello ${name}</summary>
         ${html`
-          <p>${html`Lorem ipsum dolor sit amet`}</p>
+          <p data-name="${name}">${html`Lorem ipsum dolor sit amet`}</p>
           <p>Lorem ipsum dolor sit amet</p>
           ${html`<!-- name is ${name} -->`}
           <p>${html`${['Lorem ipsum ', html`<em>dolor</em>`, ' sit amet']}`}</p>
