@@ -1,33 +1,33 @@
 import { suite } from 'uvu'
 import * as assert from 'uvu/assert'
-import { html, mount, render, use, Component, Lazy } from '../../../index.js'
+import { html, mount, render, use, Component } from '../../../examples/rewrite/lib.js'
 
 const element = suite('element')
 const rerender = suite('rerender')
+const fragment = suite('fragment')
 
 element('does not update when shallow', function () {
   let name = 'planet'
   const el = document.createElement('h1')
   const Main = Component(() => html`<h1>Hello ${name}!</h1>`)
 
-  mount(Main, el)
+  mount(el, Main)
   assert.is(el.outerHTML, '<h1>Hello planet!</h1>')
 
   name = 'world'
-  mount(Main, el)
+  mount(el, Main)
   assert.is(el.outerHTML, '<h1>Hello planet!</h1>')
 })
 
 element('does update if update function provided', function () {
-  window.debugger = true
   const el = document.createElement('h1')
   const Main = Component(() => (name) => html`<h1>Hello ${name}!</h1>`)
 
-  mount(Main('planet'), el)
+  mount(el, Main('planet'))
   assert.is(el.outerHTML, '<h1>Hello planet!</h1>')
   const [hello, planet, exlamation] = el.childNodes
 
-  mount(Main('world'), el)
+  mount(el, Main('world'))
   assert.is(el.outerHTML, '<h1>Hello world!</h1>')
   assert.ok(hello.isSameNode(el.childNodes[0]))
   assert.not.ok(planet.isSameNode(el.childNodes[1]))
@@ -114,57 +114,24 @@ rerender('update single text node', async function () {
   }
 })
 
-rerender('Lazy', async function () {
-  let done
-  const promise = new Promise(function (resolve) {
-    done = resolve
-  })
-  const res = render(html`<div>Hello ${Lazy(promise, 'world', 200)}!</div>`)
-  assert.is(res.outerHTML, '<div>Hello !</div>')
+fragment('can update fragment', function () {
+  const ul = document.createElement('ul')
+  mount(ul, html`<ul>${Component(Main)}</ul>`)
+  assert.snapshot(ul.outerHTML, '<ul><li>1</li><li>2</li><li>3</li></ul>')
 
-  await new Promise((resolve) => setTimeout(resolve, 200))
-  await new Promise(function (resolve) {
-    window.requestAnimationFrame(function () {
-      assert.is(res.outerHTML, '<div>Hello world!</div>')
-      resolve()
-    })
-  })
+  function Child () {
+    return function () {
+      return html`<li>2</li>`
+    }
+  }
 
-  done('planet')
-  await new Promise(function (resolve) {
-    window.requestAnimationFrame(function () {
-      assert.is(res.outerHTML, '<div>Hello planet!</div>')
-      resolve()
-    })
-  })
-})
-
-rerender('cached promises', async function () {
-  let resolved, done
-
-  let res = render(html`<h1>Hello ${Lazy(getComponent)}!</h1>`)
-  assert.is(res.outerHTML, '<h1>Hello !</h1>')
-
-  done('planet')
-  await new Promise(function (resolve) {
-    window.requestAnimationFrame(function () {
-      assert.is(res.outerHTML, '<h1>Hello planet!</h1>')
-      resolve()
-    })
-  })
-
-  res = render(html`<h1>Hello ${Lazy(getComponent)}!</h1>`)
-  assert.is(res.outerHTML, '<h1>Hello planet!</h1>')
-
-  function getComponent () {
-    return resolved || new Promise(function (resolve) {
-      done = function (value) {
-        resolved = value
-        resolve(value)
-      }
-    })
+  function Main () {
+    return function () {
+      return html`<li>1</li>${Component(Child)}<li>3</li>`
+    }
   }
 })
 
 element.run()
 rerender.run()
+fragment.run()

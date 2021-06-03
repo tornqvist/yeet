@@ -4,7 +4,21 @@ import { html, svg, render, mount, Component, use } from './lib.js'
 
 const target = document.getElementById('app')
 
-main('world')
+// main('world')
+
+const el = document.createElement('h1')
+document.body.append(el)
+const Main = Component(() => (name) => html`<h1>Hello ${name}!</h1>`)
+
+mount(el, Main('planet'))
+assert.is(el.outerHTML, '<h1>Hello planet!</h1>')
+const [hello, planet, exlamation] = el.childNodes
+
+mount(el, Main('world'))
+assert.is(el.outerHTML, '<h1>Hello world!</h1>')
+assert.ok(hello.isSameNode(el.childNodes[0]))
+assert.not.ok(planet.isSameNode(el.childNodes[1]))
+assert.ok(exlamation.isSameNode(el.childNodes[2]))
 
 function main (name) {
   mount(target, html`
