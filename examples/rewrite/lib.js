@@ -219,7 +219,7 @@ function transform (child, value, ctx) {
     const newNode = value.flat().reduce(function (order, value, index) {
       value = exec(value)
       let node = pick(value)
-      if (node instanceof Child) node = node.node
+      while (node instanceof Child) node = node.node
       const newChild = new Child(node, index, order, child)
       transform(newChild, value, ctx)
       order.push(newChild)
@@ -248,7 +248,7 @@ function transform (child, value, ctx) {
     value = morph(value, ctx, oldNode)
   }
 
-  if (value) cache.set(value, ctx)
+  if (value && isPartial) cache.set(value, ctx)
 
   upsert(child, value)
 }
