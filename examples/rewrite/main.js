@@ -1,4 +1,5 @@
 import './style.css'
+import * as assert from 'uvu/assert'
 import { html, svg, render, mount, Component, use } from './lib.js'
 
 const target = document.getElementById('app')

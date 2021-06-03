@@ -214,6 +214,8 @@ function createAttributeEditor (template, node) {
 }
 
 function transform (child, value, ctx) {
+  value = exec(value)
+
   if (!value) return upsert(child, null)
 
   const pick = pool(child.node)
