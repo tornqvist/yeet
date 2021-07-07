@@ -389,7 +389,7 @@ function unwrap (value, root, child, index = 0) {
   let { fn, args } = value
   let ctx = root.stack[index]
 
-  ctx.emitter.on(RENDER, onupdate)
+  ctx.emitter.on(RENDER, () => onupdate())
   ctx.editors.push(function editor (component) {
     args = component.args
     onupdate()
@@ -398,6 +398,10 @@ function unwrap (value, root, child, index = 0) {
   try {
     stack.unshift(ctx)
     value = unwind(fn(ctx.state, ctx.emit), resolve)
+    if (value instanceof Promise) {
+      value.then(onupdate)
+      return null
+    }
     if (value instanceof Component) {
       while (value instanceof Component) {
         ctx = spawn(ctx, value.key)
@@ -417,8 +421,7 @@ function unwrap (value, root, child, index = 0) {
     stack.shift()
   }
 
-  function onupdate () {
-    const value = unwind(call(rerender, ...args), resolve, ON_UPDATE)
+  function onupdate (value = unwind(call(rerender, ...args), resolve, ON_UPDATE)) {
     const next = root.stack[index + 1]
     if (next && next.key === value?.key) {
       update(next, value)
@@ -429,6 +432,12 @@ function unwrap (value, root, child, index = 0) {
 
   /** @type {Resolver} */
   function resolve (value, id, next) {
+    if (value instanceof Promise) {
+      return value.then(next, next).then(function (value) {
+        if (id === ON_UNMOUNT) rerender = value
+        return value
+      })
+    }
     try {
       if (id === ON_UNMOUNT) rerender = value
       if (typeof value === 'function') {

@@ -149,6 +149,36 @@ stores('events bubble', function () {
   assert.is(count, 2)
 })
 
+lifecycle('resolves top level promises', async function () {
+  const res = render(html`<h1>Hello ${Component(Main)}!</h1>`)
+  assert.is(res.outerHTML, '<h1>Hello !</h1>')
+  await new Promise((resolve) => setTimeout(resolve, 400))
+  assert.is(res.outerHTML, '<h1>Hello world!</h1>')
+
+  function * Main () {
+    yield new Promise((resolve) => setTimeout(resolve, 100))
+    const value = yield new Promise((resolve) => setTimeout(resolve, 100, 'world'))
+    yield new Promise((resolve) => setTimeout(resolve, 100))
+    return value
+  }
+})
+
+lifecycle('resolves nested promises', async function () {
+  const res = render(html`<h1>Hello ${Component(Main)}!</h1>`)
+  assert.is(res.outerHTML, '<h1>Hello !</h1>')
+  await new Promise((resolve) => setTimeout(resolve, 400))
+  assert.is(res.outerHTML, '<h1>Hello world!</h1>')
+
+  function Main () {
+    return function * () {
+      yield new Promise((resolve) => setTimeout(resolve, 100))
+      const value = yield new Promise((resolve) => setTimeout(resolve, 100, 'world'))
+      yield new Promise((resolve) => setTimeout(resolve, 100))
+      return value
+    }
+  }
+})
+
 lifecycle('unwinds nested functions', function () {
   let depth = 0
   render(Component(function (state, emit) {
