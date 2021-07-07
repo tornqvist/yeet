@@ -61,11 +61,11 @@ export function mount (node, partial, state = {}) {
   }
   const ctx = new Context(partial.key, state)
   if (partial instanceof Component) {
-    partial = unwrap(partial, ctx, new Child(null, 0, [], null))
+    node = unwrap(partial, ctx, new Child(node))
+  } else {
+    node = morph(partial, ctx, node)
   }
-  if (!partial) return null
-  node = morph(partial, ctx, node)
-  cache.set(node, ctx)
+  if (node) cache.set(node, ctx)
   return toNode(node)
 }
 
@@ -305,7 +305,6 @@ function unwrap (value, root, child, index = 0) {
     try {
       if (id === ON_UNMOUNT) rerender = value
       if (typeof value === 'function') {
-        // FIXME: incrementing id here does not carry over to finally block
         return unwind(value(...args), resolve, id + 1)
       }
       if (value instanceof Partial) return value
@@ -441,12 +440,20 @@ function pluck (value, list) {
     let isMatch
     const child = list[i]
     const node = child instanceof Child ? child.node : child
+    const cached = cache.get(node)
     if (!node) continue
-    if (isArray(node) && !cache.has(node)) return pluck(value, node)
-    if (value instanceof Partial) isMatch = cache.get(node)?.key === value.key
-    else if (cache.has(node)) continue
-    else if (child === value) isMatch = true
-    else isMatch = node.nodeType === (value.nodeType || TEXT_NODE)
+    if (isArray(node) && !cached) return pluck(value, node)
+    if (value instanceof Partial) {
+      isMatch = cached?.key === value.key
+      if (!isMatch) {
+        if (cached) continue
+        value = parse(value)
+      }
+    } else {
+      if (cached) continue
+      else if (child === value) isMatch = true
+    }
+    if (!isMatch) isMatch = node.nodeName === toNode(value).nodeName
     if (isMatch && (node.id || value.id)) isMatch = node.id === value.id
     if (isMatch) return list.splice(i, 1)[0]
   }
@@ -486,7 +493,9 @@ function isGenerator (obj) {
 
 function spawn (parent, key) {
   const ctx = new Context(key, create(parent.state))
-  ctx.emitter.on('*', parent.emit)
+  ctx.emitter.on('*', function (event, ...args) {
+    if (event !== RENDER) parent.emit(event, ...args)
+  })
   return ctx
 }
 

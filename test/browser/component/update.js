@@ -30,7 +30,7 @@ element('does update if update function provided', function () {
   mount(el, Main('world'))
   assert.is(el.outerHTML, '<h1>Hello world!</h1>')
   assert.ok(hello.isSameNode(el.childNodes[0]))
-  assert.not.ok(planet.isSameNode(el.childNodes[1]))
+  assert.ok(planet.isSameNode(el.childNodes[1]))
   assert.ok(exlamation.isSameNode(el.childNodes[2]))
 })
 
