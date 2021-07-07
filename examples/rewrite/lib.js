@@ -20,39 +20,122 @@ const ON_RENDER = 2
 const { isArray } = Array
 const { assign, create, entries, keys } = Object
 const raf = window.requestAnimationFrame
+
+/**
+ * @callback Editor
+ * @param {Partial} partial
+ */
+
+/**
+ * @callback Store
+ * @param {object} state
+ * @param {Emitter} emitter
+ * @returns {any}
+ */
+
+/**
+ * @callback Initialize
+ * @param {object} state
+ * @param {Emit} emit
+ * @returns {any}
+ */
+
+/**
+ * @callback Resolver
+ * @param {any} value
+ * @param {number} id
+ * @param {function(any): any} next
+ * @returns {any}
+ */
+
+/** @type {Array<Context>} */
 const stack = []
+
+/** @type {WeakMap<Ref, Node>} */
 const refs = new WeakMap()
+
+/** @type {WeakMap<Node, Context>} */
 const cache = new WeakMap()
+
+/** @type {WeakMap<Node, EventHandler>} */
 const events = new WeakMap()
+
+/** @type {WeakMap<Array<string>, Node>} */
 const templates = new WeakMap()
 
+/**
+ * Create HTML partial
+ * @export
+ * @param {Array<string>} strings Template literal strings
+ * @param {...any} values Template literal values
+ * @returns {Partial}
+ */
 export function html (strings, ...values) {
   return new Partial(strings, values)
 }
 
+/**
+ * Create SVG partial
+ * @export
+ * @param {Array<string>} strings Template literal strings
+ * @param {...any} values Template literal values
+ * @returns {Partial}
+ */
 export function svg (strings, ...values) {
   return new Partial(strings, values, true)
 }
 
+/**
+ * Treat raw html string as partial, bypassing HTML escape behavior
+ * @export
+ * @param {any} value
+ * @returns {Partial}
+ */
 export function raw (value) {
   return new Partial([String(value)], [])
 }
 
+/**
+ * Register a store function to be used for current component context
+ * @export
+ * @param {Store} fn Store function
+ * @returns {any}
+ */
 export function use (fn) {
   const { state, emitter } = stack[0]
   return fn(state, emitter)
 }
 
+/**
+ * Create element reference
+ * @export
+ * @returns {Ref}
+ */
 export function ref () {
   return new Ref()
 }
 
+/**
+ * Render partial to Node
+ * @export
+ * @param {Partia} partial The partial to be rendered
+ * @param {object} [state={}] Root state
+ * @returns {Node}
+ */
 export function render (partial, state = {}) {
   return mount(null, partial, state)
 }
 
+/**
+ * Mount partial onto DOM node
+ * @export
+ * @param {Node|string} node Any compatible node or node selector
+ * @param {Partial} partial The partial to mount
+ * @param {object} [state={}] Root state
+ * @returns {Node}
+ */
 export function mount (node, partial, state = {}) {
-  partial = exec(partial)
+  partial = call(partial)
   if (typeof node === 'string') node = document.querySelector(node)
   const cached = cache.get(node)
   if (cached?.key === partial.key) {
@@ -69,6 +152,13 @@ export function mount (node, partial, state = {}) {
   return toNode(node)
 }
 
+/**
+ * Creates a stateful component
+ * @export
+ * @param {Initialize} fn Component initialize function
+ * @param {...args} args Arguments forwarded to component render function
+ * @returns {function(...any): Component} Component render function
+ */
 export function Component (fn, ...args) {
   if (this instanceof Component) {
     this.fn = fn
@@ -81,12 +171,26 @@ export function Component (fn, ...args) {
 Component.prototype = create(Partial.prototype)
 Component.prototype.constructor = Component
 
+/**
+ * Render partial, optionally onto an existing node
+ * @export
+ * @param {Partial} partial The partial to be rendered
+ * @param {Context} ctx Current rendering context
+ * @param {Node} [node] Existing node
+ * @returns {Node}
+ */
 function morph (partial, ctx, node) {
   const { editors } = ctx
   const template = partial instanceof Partial ? parse(partial) : toNode(partial)
 
   return fromTemplate(template, node)
 
+  /**
+   * Render template node onto existing node
+   * @param {Node} template Node template element
+   * @param {Node} [node] Existing node
+   * @returns {Node}
+   */
   function fromTemplate (template, node) {
     const { nodeType } = template
 
@@ -121,12 +225,12 @@ function morph (partial, ctx, node) {
     template.childNodes.forEach(function eachChild (child, index) {
       if (isPlaceholder(child)) {
         const id = getPlaceholderId(child)
-        const value = exec(partial.values[id])
+        const value = call(partial.values[id])
         const oldChild = pluck(value, oldChildren)
         child = new Child(oldChild, index, children, node)
         transform(child, value, ctx)
         editors.push(function editor (partial) {
-          partial = exec(partial)
+          partial = call(partial)
           const isComponent = partial instanceof Component
           transform(child, isComponent ? partial : partial.values[id], ctx)
         })
@@ -146,6 +250,12 @@ function morph (partial, ctx, node) {
   }
 }
 
+/**
+ * Create an attribute editor function
+ * @param {Node} template Template node
+ * @param {Node} node Target node
+ * @returns {Editor}
+ */
 function createAttributeEditor (template, node) {
   const placeholders = []
   const fixed = []
@@ -163,6 +273,8 @@ function createAttributeEditor (template, node) {
   }
 
   if (!placeholders.length) return null
+
+  /** @type {Editor} */
   return function attributeEditor (partial) {
     const attrs = placeholders.reduce(function (attrs, { name, value }) {
       name = PLACEHOLDER.test(name)
@@ -213,8 +325,14 @@ function createAttributeEditor (template, node) {
   }
 }
 
+/**
+ * Transform child with given target value
+ * @param {Child} child Current node child
+ * @param {any} value The target value
+ * @param {Context} ctx Current render context
+ */
 function transform (child, value, ctx) {
-  value = exec(value)
+  value = call(value)
 
   if (!value) return upsert(child, null)
 
@@ -222,7 +340,7 @@ function transform (child, value, ctx) {
 
   if (isArray(value)) {
     const newNode = value.flat().reduce(function (order, value, index) {
-      value = exec(value)
+      value = call(value)
       let node = pick(value)
       while (node instanceof Child) node = node.node
       const newChild = new Child(node, index, order, child)
@@ -258,6 +376,14 @@ function transform (child, value, ctx) {
   upsert(child, value)
 }
 
+/**
+ * Unpack component render value
+ * @param {Component} value Component which to unwrap
+ * @param {Context} root The rendering context
+ * @param {Child} child Current child
+ * @param {number} index Current unwrap depth
+ * @returns {any}
+ */
 function unwrap (value, root, child, index = 0) {
   let rerender
   let { fn, args } = value
@@ -292,7 +418,7 @@ function unwrap (value, root, child, index = 0) {
   }
 
   function onupdate () {
-    const value = unwind(exec(rerender, ...args), resolve, ON_UPDATE)
+    const value = unwind(call(rerender, ...args), resolve, ON_UPDATE)
     const next = root.stack[index + 1]
     if (next && next.key === value?.key) {
       update(next, value)
@@ -301,6 +427,7 @@ function unwrap (value, root, child, index = 0) {
     }
   }
 
+  /** @type {Resolver} */
   function resolve (value, id, next) {
     try {
       if (id === ON_UNMOUNT) rerender = value
@@ -319,6 +446,13 @@ function unwrap (value, root, child, index = 0) {
   }
 }
 
+/**
+ * Recursively unwind nested generator functions
+ * @param {any} value The value to unwind
+ * @param {Resolver} resolve Resolver function
+ * @param {number} id Current unwind depth
+ * @returns {any}
+ */
 function unwind (value, resolve, id = ON_UNMOUNT) {
   if (isGenerator(value)) {
     let res = value.next()
@@ -332,6 +466,11 @@ function unwind (value, resolve, id = ON_UNMOUNT) {
   return resolve(value, id)
 }
 
+/**
+ * Update node in-place
+ * @param {Child} child Current child
+ * @param {any} newNode New node to put in-place
+ */
 function upsert (child, newNode) {
   let { node: oldNode, index, order, parent } = child
 
@@ -379,6 +518,11 @@ function upsert (child, newNode) {
   }
 }
 
+/**
+ * Execute context editors with partial values
+ * @param {Context} ctx Context which to update
+ * @param {Partial} partial Partial with which to update
+ */
 function update (ctx, partial) {
   try {
     stack.unshift(ctx.state)
@@ -388,6 +532,12 @@ function update (ctx, partial) {
   }
 }
 
+/**
+ * Find previous node sibling
+ * @param {number} index Where to start looking
+ * @param {Array<Child|Node>} list Node siblings
+ * @returns {Node}
+ */
 function findPrev (index, list) {
   for (let i = index - 1; i >= 0; i--) {
     let prev = list[i]
@@ -401,6 +551,10 @@ function findPrev (index, list) {
   }
 }
 
+/**
+ * Remove node
+ * @param {Node|Child|Array<Node>} node Node to remove
+ */
 function remove (node) {
   while (node instanceof Child) node = node.node
   if (isArray(node)) {
@@ -411,6 +565,11 @@ function remove (node) {
   }
 }
 
+/**
+ * Replace node
+ * @param {Node|Child|Array<Node>} oldNode Node to be replaced
+ * @param {Node} newNode New node to insert
+ */
 function replace (oldNode, newNode) {
   while (oldNode instanceof Child) oldNode = oldNode.node
   if (isArray(oldNode)) {
@@ -422,6 +581,10 @@ function replace (oldNode, newNode) {
   }
 }
 
+/**
+ * Deplete all hooks registered with node
+ * @param {Node} node Node by which to lookup hooks
+ */
 function unhook (node) {
   raf(function () {
     const cached = cache.get(node)
@@ -429,11 +592,22 @@ function unhook (node) {
   })
 }
 
+/**
+ * Create a pool of Nodes from which to pluck values
+ * @param {Array<Node|Child>} nodes List of nodes from which to pluck
+ * @returns {function(any): Node}
+ */
 function pool (nodes) {
   nodes = isArray(nodes) && !cache.has(nodes) ? [...nodes] : [nodes]
   return (value) => pluck(value, nodes)
 }
 
+/**
+ * Pluck matching node from list of nodes
+ * @param {any} value Value for which to find a match
+ * @param {Array<Node|Child>} list List of nodes from which to pluck
+ * @returns {Node}
+ */
 function pluck (value, list) {
   if (!value) return null
   for (let i = 0, len = list.length; i < len; i++) {
@@ -460,6 +634,11 @@ function pluck (value, list) {
   return null
 }
 
+/**
+ * Cast value to node
+ * @param {any} value The value to be cast
+ * @returns {Node}
+ */
 function toNode (value) {
   if (!value) return null
   if (value instanceof window.Node) return value
@@ -472,10 +651,22 @@ function toNode (value) {
   return document.createTextNode(String(value))
 }
 
-function exec (fn, ...args) {
+/**
+ * Call provided function
+ * @param {function(...any): any} fn Function to be called
+ * @param  {...any} args Arguments to forward to provided function
+ * @returns {any}
+ */
+function call (fn, ...args) {
   return typeof fn === 'function' ? fn(...args) : fn
 }
 
+/**
+ * Create wrapper for function to only be called once
+ * @param {function(any): any} fn Function which to wrap
+ * @param  {...any} args Arguments to forward to function
+ * @returns {function(): void}
+ */
 function once (fn, ...args) {
   let done = false
   return function () {
@@ -485,12 +676,23 @@ function once (fn, ...args) {
   }
 }
 
+/**
+ * Determine wether value is generator
+ * @param {any} obj Object to test
+ * @returns {Boolean}
+ */
 function isGenerator (obj) {
   return obj &&
     typeof obj.next === 'function' &&
     typeof obj.throw === 'function'
 }
 
+/**
+ * Create a new context, forwarding events to parent
+ * @param {Context} parent Context object from which to inherit state
+ * @param {any} key New context key value
+ * @returns {Context}
+ */
 function spawn (parent, key) {
   const ctx = new Context(key, create(parent.state))
   ctx.emitter.on('*', function (event, ...args) {
@@ -499,15 +701,31 @@ function spawn (parent, key) {
   return ctx
 }
 
+/**
+ * Get placeholder id
+ * @param {Node} node The placeholder node
+ * @returns {number}
+ */
 function getPlaceholderId (node) {
   return +node.nodeValue.match(PLACEHOLDER)[1]
 }
 
+/**
+ * Determine whether node is a placeholder node
+ * @param {Node} node The node to test
+ * @returns {Boolean}
+ */
 function isPlaceholder (node) {
   const { nodeValue, nodeType } = node
   return nodeType === COMMENT_NODE && PLACEHOLDER_NODE.test(nodeValue)
 }
 
+/**
+ * Resolve values from placeholder string
+ * @param {string} str String from which to match values
+ * @param {Array<any>} values List of values to replace placeholders with
+ * @returns {any}
+ */
 function resolvePlaceholders (str, values) {
   const [match, id] = str.match(PLACEHOLDER)
   if (match === str) return values[+id]
@@ -515,6 +733,11 @@ function resolvePlaceholders (str, values) {
   return str.replace(pattern, (_, id) => values[+id])
 }
 
+/**
+ * Parse partial
+ * @param {Partial} partial The partial to parse
+ * @returns {Node}
+ */
 function parse (partial) {
   const { strings, isSVG } = partial
   let template = templates.get(strings)
@@ -541,6 +764,14 @@ function parse (partial) {
   return template
 }
 
+/**
+ * Child node container
+ * @class Child
+ * @param {Node} node Current node
+ * @param {number} index Node position
+ * @param {Array<Node|Child>} order List of sibling nodes
+ * @param {Node} parent Parent node
+ */
 function Child (node, index, order, parent) {
   this.node = node
   this.index = index
@@ -548,6 +779,14 @@ function Child (node, index, order, parent) {
   this.parent = parent
 }
 
+/**
+ * Create a html partial object
+ * @export
+ * @class Partial
+ * @param {Array<string>} strings Template strings
+ * @param {Array<any>} values Template partials
+ * @param {Boolean} isSVG Whether the partial is an SVG node
+ */
 export function Partial (strings, values, isSVG = false) {
   this.key = strings
   this.strings = strings
@@ -555,6 +794,13 @@ export function Partial (strings, values, isSVG = false) {
   this.isSVG = isSVG
 }
 
+/**
+ * Create a context object
+ * @export
+ * @class Context
+ * @param {any} key Unique context identifier
+ * @param {object} [state={}] Context state object
+ */
 function Context (key, state = {}) {
   this.key = key
   this.hooks = []
