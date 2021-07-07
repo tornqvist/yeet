@@ -1,18 +1,17 @@
-import { html, mount, Component } from '../../index.js'
+import { html, mount, Component } from '../rewrite/lib.js'
 import './style.css'
 
-mount(Component(Caffeine), document.getElementById('app'))
+mount(document.getElementById('app'), Component(Caffeine))
 
 function * Caffeine (state, emit) {
   // ↓ Setup variables (only happens once per component lifetime)
 
   let interval
   let seconds = 5
-
-  function reset () {
+  const reset = () => {
     seconds = 5
-    interval = null
     clearInterval(interval)
+    interval = null
     emit('render')
   }
 
