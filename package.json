@@ -24,7 +24,6 @@
     "server.js",
     "dist"
   ],
-  "private": true,
   "author": "Carl Törnqvist <carl@tornqv.ist>",
   "license": "MIT",
   "devDependencies": {
