@@ -1,6 +1,7 @@
 import { suite } from 'uvu'
+import { Readable } from 'stream'
 import * as assert from 'uvu/assert'
-import { html, Partial, mount, render, renderToStream } from '../../server.js'
+import { html, Partial, mount, render } from '../../server.js'
 
 const partial = suite('partial')
 const mounting = suite('mount')
@@ -16,8 +17,16 @@ partial('can render to promise', async function () {
   assert.is(await promise, '<div>Hello world!</div>')
 })
 
+partial('is async iterable', async function () {
+  const partial = html`<div>Hello world!</div>`
+  assert.type(partial[Symbol.asyncIterator], 'function')
+  let res = ''
+  for await (const chunk of partial) res += chunk
+  assert.is(res, '<div>Hello world!</div>')
+})
+
 partial('can render to stream', async function () {
-  const stream = renderToStream(html`<div>Hello world!</div>`)
+  const stream = Readable.from(html`<div>Hello world!</div>`)
   const string = await new Promise(function (resolve, reject) {
     let string = ''
     stream.on('data', function (chunk) {

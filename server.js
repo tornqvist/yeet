@@ -1,5 +1,3 @@
-import { Readable, PassThrough } from 'stream'
-
 const RENDER = 'render'
 const REF_ATTR = /\s*ref=("|')?$/i
 const ATTRIBUTE = /<[a-z-]+[^>]*?\s+(([^\t\n\f "'>/=]+)=("|')?)?$/i
@@ -109,29 +107,6 @@ export async function render (partial, state = {}) {
 }
 
 /**
- * Render partial to stream
- * @export
- * @param {Partial} partial The partial to render
- * @param {object} [state={}] Root state passed down to components
- * @returns {Readable}
- */
-export function renderToStream (partial, state = {}) {
-  if (typeof partial === 'function') partial = partial()
-  if (partial instanceof Component) {
-    const stream = new PassThrough()
-    unwrap(partial, state).then(async function (res) {
-      if (res instanceof Partial) renderToStream(res, state).pipe(stream)
-      else if (res) stream.write(res)
-      else stream.end()
-    }, function (err) {
-      stream.destroy(err)
-    })
-    return stream
-  }
-  return Readable.from(parse(partial, state))
-}
-
-/**
  * Create element reference
  * @export
  * @returns {Ref}
@@ -169,6 +144,10 @@ export class Partial {
     this.strings = strings
     this.values = values
   }
+
+  async * [Symbol.asyncIterator] (state = {}) {
+    yield * parse(this, state)
+  }
 }
 
 /**
@@ -188,6 +167,9 @@ export function Component (fn, ...args) {
 }
 Component.prototype = Object.create(Partial.prototype)
 Component.prototype.constructor = Component
+Component.prototype[Symbol.asyncIterator] = async function * (state = {}) {
+  yield * await unwrap(this, state)
+}
 
 /**
  * Create iterable for partial

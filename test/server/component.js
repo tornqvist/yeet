@@ -1,6 +1,7 @@
 import { suite } from 'uvu'
+import { Readable } from 'stream'
 import * as assert from 'uvu/assert'
-import { html, Partial, Component, use, mount, render, renderToStream } from '../../server.js'
+import { html, Partial, Component, use, mount, render } from '../../server.js'
 
 const api = suite('api')
 const lifecycle = suite('lifecycle')
@@ -21,9 +22,17 @@ api('can render to promise', async function () {
   assert.is(await promise, '<div>Hello world!</div>')
 })
 
+api('is async iterable', async function () {
+  const MyComponent = Component(() => html`<div>Hello world!</div>`)
+  assert.type(MyComponent()[Symbol.asyncIterator], 'function')
+  let res = ''
+  for await (const chunk of MyComponent()) res += chunk
+  assert.is(res, '<div>Hello world!</div>')
+})
+
 api('can render to stream', async function () {
   const MyComponent = Component(() => html`<div>Hello world!</div>`)
-  const stream = renderToStream(MyComponent)
+  const stream = Readable.from(MyComponent())
   const string = await new Promise(function (resolve, reject) {
     let string = ''
     stream.on('data', function (chunk) {
