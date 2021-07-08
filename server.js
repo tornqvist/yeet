@@ -1,5 +1,6 @@
 import { Readable, PassThrough } from 'stream'
 
+const RENDER = 'render'
 const REF_ATTR = /\s*ref=("|')?$/i
 const ATTRIBUTE = /<[a-z-]+[^>]*?\s+(([^\t\n\f "'>/=]+)=("|')?)?$/i
 const BOOL_PROPS = [
@@ -8,6 +9,20 @@ const BOOL_PROPS = [
   'ismap', 'loop', 'multiple', 'muted', 'novalidate', 'open', 'playsinline',
   'readonly', 'required', 'reversed', 'selected'
 ]
+
+/**
+ * @callback Store
+ * @param {object} state
+ * @param {Emitter} emitter
+ * @returns {any}
+ */
+
+/**
+ * @callback Initialize
+ * @param {object} state
+ * @param {Emit} emit
+ * @returns {any}
+ */
 
 /** @type {Context|null} */
 let current
@@ -23,16 +38,9 @@ const cache = new WeakMap()
  */
 
 /**
- * Register a store
- * @example
- * function MyComponent (state, emit) {
- *   use(function (state, emitter) {
- *     state.name = 'world'
- *   })
- *   return (props) => html`<h1>Hello ${state.name}!</h1>`
- * }
+ * Register a store function to be used for current component context
  * @export
- * @param {Store} fn A store function
+ * @param {Store} fn Store function
  * @returns {any}
  */
 export function use (fn) {
@@ -40,34 +48,30 @@ export function use (fn) {
 }
 
 /**
- * Create html partial
- * @example
- * html`<h1>Hello world!</h1>`
+ * Create HTML partial
  * @export
- * @param {string[]} strings Template literal strings
- * @param {...any} values Interpolated values
- * @returns
+ * @param {Array<string>} strings Template literal strings
+ * @param {...any} values Template literal values
+ * @returns {Partial}
  */
 export function html (strings, ...values) {
   return new Partial({ strings, values })
 }
 
 /**
- * Create svg partial
- * @example
- * svg`<circle cx="50" cy="50" r="50"/>`
+ * Create SVG partial
  * @export
- * @param {string[]} strings Template literal strings
- * @param {...any} values Interpolated values
- * @returns
+ * @param {Array<string>} strings Template literal strings
+ * @param {...any} values Template literal values
+ * @returns {Partial}
  */
 export const svg = html
 
 /**
- * Create raw html, bypassing escape
+ * Treat raw HTML string as partial, bypassing HTML escape behavior
  * @export
  * @param {any} value
- * @returns {Raw}
+ * @returns {Partial}
  */
 export function raw (value) {
   return new Raw(value)
@@ -75,15 +79,13 @@ export function raw (value) {
 
 /**
  * Declare where partial is to be mounted in DOM, useful for SSR
- * @example
- * export mount(html`<body>Hello world</body>`, 'body')
  * @export
+ * @param {Node|string} node Any compatible node or node selector
  * @param {Partial} partial The partial to mount
- * @param {string} selector A DOM selector
- * @param {object} [state={}] Initial state
+ * @param {object} [state={}] Root state
  * @returns {Partial}
  */
-export function mount (partial, selector, state = {}) {
+export function mount (selector, partial, state = {}) {
   partial.selector = selector
   partial.state = state
   return partial
@@ -92,11 +94,12 @@ export function mount (partial, selector, state = {}) {
 /**
  * Render partial to promise
  * @export
- * @param {Partial} partial The partial to render
- * @param {object} [state={}] Root state passed down to components
+ * @param {Partial} partial The partial to be rendered
+ * @param {object} [state={}] Root state
  * @returns {Promise}
  */
 export async function render (partial, state = {}) {
+  if (typeof partial === 'function') partial = partial()
   if (partial instanceof Component) partial = await unwrap(partial, state)
   if (!(partial instanceof Partial)) return Promise.resolve(partial)
 
@@ -113,6 +116,7 @@ export async function render (partial, state = {}) {
  * @returns {Readable}
  */
 export function renderToStream (partial, state = {}) {
+  if (typeof partial === 'function') partial = partial()
   if (partial instanceof Component) {
     const stream = new PassThrough()
     unwrap(partial, state).then(async function (res) {
@@ -128,7 +132,7 @@ export function renderToStream (partial, state = {}) {
 }
 
 /**
- * Create ref
+ * Create element reference
  * @export
  * @returns {Ref}
  */
@@ -137,7 +141,7 @@ export function ref () {
 }
 
 /**
- * Context for component
+ * Create a context object
  * @class Context
  * @param {object} [state={}] Initial state
  */
@@ -150,13 +154,13 @@ function Context (state = {}) {
 }
 
 /**
- * Holder of raw html value
+ * Holder of raw HTML value
  * @class Raw
  */
 class Raw extends String {}
 
 /**
- * Partial html content
+  * Create a HTML partial object
  * @export
  * @class Partial
  */
@@ -168,29 +172,19 @@ export class Partial {
 }
 
 /**
- * Create stateful component, functions as proxy for partial
- * @example
- * // Initialize when used
- * html`<div>${Component(HelloFunction, { name: 'world' })}</div>`
- * @example
- * // Initialize when declaring
- * const Hello = Component(HelloFunction)
- * html`<div>${Hello({ name: 'world' })}</div>`
+ * Creates a stateful component
  * @export
- * @param {function} fn Component setup function
- * @param {...any} [args] Arguments to forward to component
- * @return {Component}
+ * @param {Initialize} fn Component initialize function
+ * @param {...args} args Arguments forwarded to component render function
+ * @returns {function(...any): Component} Component render function
  */
 export function Component (fn, ...args) {
-  Object.setPrototypeOf(Render, Component.prototype)
-  Render.fn = fn
-  Render.args = args
-  return Render
-
-  function Render () {
-    if (arguments.length) args = arguments
-    return new Component(fn, ...args)
+  if (this instanceof Component) {
+    this.fn = fn
+    this.args = args
+    return this
   }
+  return (...args) => new Component(fn, ...args)
 }
 Component.prototype = Object.create(Partial.prototype)
 Component.prototype.constructor = Component
@@ -213,7 +207,7 @@ async function * parse (partial, state = {}) {
     const string = strings[i]
     let value = await values[i]
 
-    // Aggregate html as we pass through
+    // Aggregate HTML as we pass through
     html += string
 
     const isAttr = ATTRIBUTE.test(html)
@@ -275,6 +269,7 @@ async function * resolve (value, state) {
     return
   }
 
+  if (typeof value === 'function') value = value()
   if (value instanceof Component) value = await unwrap(value, state)
   if (value instanceof Partial) {
     yield * parse(value, state)
@@ -283,6 +278,11 @@ async function * resolve (value, state) {
   }
 }
 
+/**
+ * Escape HTML characters
+ * @param {string} value
+ * @returns {string}
+ */
 function escape (value) {
   return String(value)
     .replace(/&/g, '&amp;')
@@ -292,6 +292,12 @@ function escape (value) {
     .replace(/'/g, '&#039;')
 }
 
+/**
+ * Unwrap Component value
+ * @param {Component} component
+ * @param {object} state
+ * @returns {any}
+ */
 function unwrap (component, state) {
   const { fn, args } = component
   const ctx = current = new Context(state)
@@ -300,7 +306,7 @@ function unwrap (component, state) {
 }
 
 /**
- * Serialize an object to html attributes
+ * Serialize an object to HTML attributes
  * @param {object} obj An object
  * @returns {Promise<string>}
  */
@@ -322,13 +328,12 @@ async function objToAttrs (obj) {
  */
 async function unwind (value, ctx, args) {
   while (typeof value === 'function') {
-    if (value instanceof Component) {
-      value = await unwrap(value, ctx.state)
-    } else {
-      current = ctx
-      value = value(...args)
-      args = [] // Only forward arguments once – to the setup function
-    }
+    current = ctx
+    value = value(...args)
+    args = []
+  }
+  if (value instanceof Component) {
+    value = await unwrap(value, ctx.state)
   }
   if (isGenerator(value)) {
     let res = value.next()
@@ -371,8 +376,9 @@ function isGenerator (obj) {
 class Ref {}
 
 /**
- * A basic event emitter implementation
+ * Generic event emitter
  * @class Emitter
+ * @extends {Map}
  */
 class Emitter extends Map {
   constructor (emitter) {
@@ -383,19 +389,37 @@ class Emitter extends Map {
     }
   }
 
+  /**
+   * Attach listener for event
+   * @param {string} event Event name
+   * @param {function(...any): void} fn Event listener function
+   * @memberof Emitter
+   */
   on (event, fn) {
     const listeners = this.get(event)
     if (listeners) listeners.add(fn)
     else this.set(event, new Set([fn]))
   }
 
+  /**
+   * Remove given listener for event
+   * @param {string} event Event name
+   * @param {function(...any): void} fn Registered listener
+   * @memberof Emitter
+   */
   removeListener (event, fn) {
     const listeners = this.get(event)
     if (listeners) listeners.delete(fn)
   }
 
+  /**
+   * Emit event to all listeners
+   * @param {string} event Event name
+   * @param {...any} args Event parameters to be forwarded to listeners
+   * @memberof Emitter
+   */
   emit (event, ...args) {
-    if (event === 'render') return
+    if (event === RENDER) return
     if (event !== '*') this.emit('*', event, ...args)
     if (!this.has(event)) return
     for (const fn of this.get(event)) fn(...args)

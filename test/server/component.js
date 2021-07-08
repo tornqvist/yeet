@@ -38,7 +38,7 @@ api('can render to stream', async function () {
 })
 
 api('can mount', async function () {
-  const res = mount(Component(Main), 'body')
+  const res = mount('body', Component(Main))
   assert.is(res.selector, 'body')
   assert.is(await render(res), '<body>Hello world!</body>')
 
@@ -106,10 +106,18 @@ rendering('return just child', async function () {
 })
 
 rendering('nested component', async function () {
+  const Child = Component(function Child (state, emit) {
+    assert.type(state, 'object')
+    assert.type(emit, 'function')
+    return function (props) {
+      assert.is(props.test, 'fest')
+      return 'world'
+    }
+  })
   const Main = Component(function Main (state, emit) {
     return html`
       <span>
-        Hello ${Component(Child, { test: 'fest' })}!
+        Hello ${Child({ test: 'fest' })}!
       </span>
     `
   })
@@ -126,15 +134,6 @@ rendering('nested component', async function () {
       </span>
     </div>
   `)
-
-  function Child (state, emit) {
-    assert.type(state, 'object')
-    assert.type(emit, 'function')
-    return function (props) {
-      assert.is(props.test, 'fest')
-      return 'world'
-    }
-  }
 })
 
 state('is mutable by top level component', async function () {
