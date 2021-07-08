@@ -10,11 +10,15 @@ const lifecycle = suite('lifecycle')
 
 component('inherits partial', function () {
   assert.type(Component, 'function')
+  assert.ok(Object.isPrototypeOf.call(Partial.prototype, Component.prototype))
 })
 
-component('is infinite function', function () {
-  assert.type(Component(Function.prototype), 'function')
-  assert.instance(Component(Function.prototype), Partial)
+component('returns component object', function () {
+  const fn = Component(Function.prototype)
+  assert.type(fn, 'function')
+  const res = fn()
+  assert.instance(res, Partial)
+  assert.instance(res, Component)
 })
 
 args('should be function', function () {
@@ -37,6 +41,30 @@ args('are forwarded', function () {
     }
   })
   render(MyComponent('test'))
+})
+
+args('can be provided on declaration', function () {
+  const MyComponent = Component(Main, 'world')
+  render(MyComponent)
+  function Main () {
+    return (name) => assert.is(name, 'world')
+  }
+})
+
+args('can be supplied when calling', function () {
+  const MyComponent = Component(Main)
+  render(MyComponent('world'))
+  function Main () {
+    return (name) => assert.is(name, 'world')
+  }
+})
+
+args('provided when called override declaration arguments', function () {
+  const MyComponent = Component(Main, 'world')
+  render(MyComponent('planet'))
+  function Main () {
+    return (name) => assert.is(name, 'planet')
+  }
 })
 
 state('is inherited', function () {
@@ -145,6 +173,36 @@ stores('events bubble', function () {
   assert.is(count, 2)
 })
 
+lifecycle('resolves top level promises', async function () {
+  const res = render(html`<h1>Hello ${Component(Main)}!</h1>`)
+  assert.is(res.outerHTML, '<h1>Hello !</h1>')
+  await new Promise((resolve) => setTimeout(resolve, 400))
+  assert.is(res.outerHTML, '<h1>Hello world!</h1>')
+
+  function * Main () {
+    yield new Promise((resolve) => setTimeout(resolve, 100))
+    const value = yield new Promise((resolve) => setTimeout(resolve, 100, 'world'))
+    yield new Promise((resolve) => setTimeout(resolve, 100))
+    return value
+  }
+})
+
+lifecycle('resolves nested promises', async function () {
+  const res = render(html`<h1>Hello ${Component(Main)}!</h1>`)
+  assert.is(res.outerHTML, '<h1>Hello !</h1>')
+  await new Promise((resolve) => setTimeout(resolve, 400))
+  assert.is(res.outerHTML, '<h1>Hello world!</h1>')
+
+  function Main () {
+    return function * () {
+      yield new Promise((resolve) => setTimeout(resolve, 100))
+      const value = yield new Promise((resolve) => setTimeout(resolve, 100, 'world'))
+      yield new Promise((resolve) => setTimeout(resolve, 100))
+      return value
+    }
+  }
+})
+
 lifecycle('unwinds nested functions', function () {
   let depth = 0
   render(Component(function (state, emit) {
@@ -167,7 +225,7 @@ lifecycle('resolves generators', async function () {
   const div = document.createElement('div')
 
   await new Promise(function (resolve, reject) {
-    mount(html`<div>${Component(Main)}</div>`, div)
+    mount(div, html`<div>${Component(Main)}</div>`)
     assert.is(setup, 1, 'setup called once')
     assert.is(update, 0, 'update not called yet')
     assert.is(render, 1, 'render called once')
@@ -180,7 +238,7 @@ lifecycle('resolves generators', async function () {
   })
 
   await new Promise(function (resolve, reject) {
-    mount(html`<div>${Component(Main)}</div>`, div)
+    mount(div, html`<div>${Component(Main)}</div>`)
     assert.is(setup, 1, 'setup still only called once')
     assert.is(update, 1, 'update still only called once')
     assert.is(render, 2, 'render called twice')
@@ -192,7 +250,7 @@ lifecycle('resolves generators', async function () {
   })
 
   await new Promise(function (resolve) {
-    mount(html`<div><h1>Hello world!</h1></div>`, div)
+    mount(div, html`<div><h1>Hello world!</h1></div>`)
     window.requestAnimationFrame(function () {
       assert.is(unmount, 1, 'unmount called once')
       resolve()
@@ -216,9 +274,9 @@ lifecycle('children unmount w/ parent', async function () {
   let counter = 0
   const div = document.createElement('div')
 
-  mount(html`<div>${Component(Parent)}</div>`, div)
+  mount(div, html`<div>${Component(Parent)}</div>`)
   await new Promise(function (resolve) {
-    mount(html`<div><h1>Hello world!</h1></div>`, div)
+    mount(div, html`<div><h1>Hello world!</h1></div>`)
     window.requestAnimationFrame(function () {
       assert.is(counter, 2)
       resolve()

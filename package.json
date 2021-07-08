@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "main": "dist/server.cjs.js",
   "browser": "dist/browser.cjs.js",
+  "types": "dist/index.d.ts",
   "type": "module",
   "exports": {
     "import": "./index.js",
@@ -14,7 +15,9 @@
     "test": "uvu test/server && umu test/browser && standard",
     "build": "npm run build:server && npm run build:browser",
     "build:server": "rollup --no-esModule --format=cjs --file=dist/server.cjs.js server.js",
-    "build:browser": "rollup --no-esModule --format=cjs --file=dist/browser.cjs.js index.js"
+    "build:browser": "rollup --no-esModule --format=cjs --file=dist/browser.cjs.js index.js",
+    "compile": "npx -p typescript tsc *.js --declaration --allowJs --emitDeclarationOnly --outFile dist/index.d.ts",
+    "prepublishOnly": "npm run build && npm run compile"
   },
   "files": [
     "index.js",

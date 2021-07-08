@@ -7,7 +7,7 @@ const reuse = suite('reuse')
 
 api('can mount', function () {
   const div = document.createElement('div')
-  mount(Component(Main), div)
+  mount(div, Component(Main))
   assert.is(div.outerHTML, '<div>Hello world!</div>')
 
   function Main (state, emit) {
@@ -19,12 +19,12 @@ reuse('immediate child component', function () {
   const div = document.createElement('div')
   let init = 0
 
-  mount(foo(), div)
+  mount(div, foo())
   assert.is(div.textContent.trim(), '1')
 
   const child = div.firstElementChild
 
-  mount(bar(), div)
+  mount(div, bar())
   assert.is(div.textContent.trim(), '2')
   assert.is(div.firstElementChild, child)
 
@@ -51,13 +51,13 @@ reuse('nested child component', function () {
   const div = document.createElement('div')
   let init = 0
 
-  mount(foo(), div)
+  mount(div, foo())
 
   const parent = div.firstElementChild
   const counter = parent.firstElementChild
   assert.is(counter.textContent, '1')
 
-  mount(bar(), div)
+  mount(div, bar())
 
   assert.is(div.firstElementChild, parent)
   assert.is(div.firstElementChild.firstElementChild, counter)
@@ -93,12 +93,12 @@ reuse('not possible for unkeyed partial', function () {
   const div = document.createElement('div')
   let init = 0
 
-  mount(foo(), div)
+  mount(div, foo())
 
   const counter = div.firstElementChild.firstElementChild
   assert.is(counter.textContent, '1')
 
-  mount(bar(), div)
+  mount(div, bar())
 
   assert.is.not(div.firstElementChild.firstElementChild, counter)
   assert.is(div.firstElementChild.firstElementChild.textContent, '1')

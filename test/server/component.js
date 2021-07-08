@@ -1,6 +1,7 @@
 import { suite } from 'uvu'
+import { Readable } from 'stream'
 import * as assert from 'uvu/assert'
-import { html, Partial, Component, use, mount, render, renderToStream } from '../../server.js'
+import { html, Partial, Component, use, mount, render } from '../../server.js'
 
 const api = suite('api')
 const lifecycle = suite('lifecycle')
@@ -21,9 +22,17 @@ api('can render to promise', async function () {
   assert.is(await promise, '<div>Hello world!</div>')
 })
 
+api('is async iterable', async function () {
+  const MyComponent = Component(() => html`<div>Hello world!</div>`)
+  assert.type(MyComponent()[Symbol.asyncIterator], 'function')
+  let res = ''
+  for await (const chunk of MyComponent()) res += chunk
+  assert.is(res, '<div>Hello world!</div>')
+})
+
 api('can render to stream', async function () {
   const MyComponent = Component(() => html`<div>Hello world!</div>`)
-  const stream = renderToStream(MyComponent)
+  const stream = Readable.from(MyComponent())
   const string = await new Promise(function (resolve, reject) {
     let string = ''
     stream.on('data', function (chunk) {
@@ -37,8 +46,32 @@ api('can render to stream', async function () {
   assert.is(string, '<div>Hello world!</div>')
 })
 
+api('can be declared with arguments', async function () {
+  const MyComponent = Component(Main, 'world')
+  await render(MyComponent)
+  function Main () {
+    return (name) => assert.is(name, 'world')
+  }
+})
+
+api('can be called with arguments', async function () {
+  const MyComponent = Component(Main)
+  await render(MyComponent('world'))
+  function Main () {
+    return (name) => assert.is(name, 'world')
+  }
+})
+
+api('calling arguments override declaration arguments', async function () {
+  const MyComponent = Component(Main, 'world')
+  await render(MyComponent('planet'))
+  function Main () {
+    return (name) => assert.is(name, 'planet')
+  }
+})
+
 api('can mount', async function () {
-  const res = mount(Component(Main), 'body')
+  const res = mount('body', Component(Main))
   assert.is(res.selector, 'body')
   assert.is(await render(res), '<body>Hello world!</body>')
 
@@ -106,10 +139,18 @@ rendering('return just child', async function () {
 })
 
 rendering('nested component', async function () {
+  const Child = Component(function Child (state, emit) {
+    assert.type(state, 'object')
+    assert.type(emit, 'function')
+    return function (props) {
+      assert.is(props.test, 'fest')
+      return 'world'
+    }
+  })
   const Main = Component(function Main (state, emit) {
     return html`
       <span>
-        Hello ${Component(Child, { test: 'fest' })}!
+        Hello ${Child({ test: 'fest' })}!
       </span>
     `
   })
@@ -126,15 +167,6 @@ rendering('nested component', async function () {
       </span>
     </div>
   `)
-
-  function Child (state, emit) {
-    assert.type(state, 'object')
-    assert.type(emit, 'function')
-    return function (props) {
-      assert.is(props.test, 'fest')
-      return 'world'
-    }
-  }
 })
 
 state('is mutable by top level component', async function () {

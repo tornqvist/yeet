@@ -1,9 +1,9 @@
 import { html, use, mount, Component } from '../../index.js'
 import './style.css'
 
-mount(Component(App), document.getElementById('app'))
+mount(document.getElementById('app'), Component(App))
 
-function Comments (state, emit) {
+const Comments = Component(function Comments (state, emit) {
   const api = use(cache)
 
   return function * ({ id }) {
@@ -21,7 +21,7 @@ function Comments (state, emit) {
       </ol>
     `
   }
-}
+})
 
 function Posts (state, emit) {
   const api = use(cache)
@@ -40,7 +40,7 @@ function Posts (state, emit) {
               <h2>${post.title}</h2>
               <p>${post.body}</p>
               ${expanded === post.id
-                ? Component(Comments, { id: post.id })
+                ? Comments({ id: post.id })
                 : html`<button onclick=${onclick}>Show comments</button>`}
             </li>
           `
