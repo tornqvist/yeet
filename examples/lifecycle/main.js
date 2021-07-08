@@ -1,4 +1,4 @@
-import { html, mount, Component } from '../rewrite/lib.js'
+import { html, mount, Component } from '../../lib.js'
 import './style.css'
 
 mount(document.getElementById('app'), Component(Caffeine))

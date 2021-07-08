@@ -1,4 +1,4 @@
-import { html, use, mount, Component } from '../rewrite/lib.js'
+import { html, use, mount, Component } from '../../index.js'
 import './style.css'
 
 mount(document.getElementById('app'), Component(App))
