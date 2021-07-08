@@ -13,7 +13,7 @@
   },
   "scripts": {
     "test": "uvu test/server && umu test/browser && standard",
-    "build": "npm run build:server && npm run build:browser",
+    "build": "npm run build:server && npm run build:browser && echo '{\"type\":\"commonjs\"}' > dist/package.json",
     "build:server": "rollup --no-esModule --format=cjs --file=dist/server.cjs.js server.js",
     "build:browser": "rollup --no-esModule --format=cjs --file=dist/browser.cjs.js index.js",
     "compile": "npx -p typescript tsc *.js --declaration --allowJs --emitDeclarationOnly --outFile dist/index.d.ts",
