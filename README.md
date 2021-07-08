@@ -44,7 +44,7 @@
 ```js
 import { html, mount, use, Component } from 'https://cdn.skypack.dev/yeet'
 
-mount(Component(App), 'body')
+mount('body', Component(App))
 
 function App (state, emit) {
   use(store)
@@ -131,8 +131,8 @@ their state and issue a re-render.
 
 ## Components
 Components can be usefull in situations when you need a locally contained state,
-want to use some third party library which or want to know when components mount
-or unmout in the DOM.
+want to use some third party library or want to know when components mount or
+unmout in the DOM.
 
 Components in yeet use [generator functions][generator functions] to control the
 component lifecycle. By using generators yeet can step through your component
@@ -147,7 +147,7 @@ import mapboxgl from 'https://cdn.skypack.dev/mapbox-gl'
 
 const state = { center: [18.0704503, 59.3244897] }
 
-mount(Component(Map), '#app', state)
+mount('#app', Component(Map), state)
 
 function * Map (state, emit) {
   const container = ref()
@@ -211,12 +211,12 @@ it is removed from the DOM. A yeet component's lifecycle is thereby clearly laid
 out in chronological order, from top to bottom.
 
 #### Lifecycle
-Generators are used to declare the lifecycle of yeet components. Only functions
-and html partials (returned by the `html` and `svg` tags) carry any special
-meaning when using `yield` (with the exception of promises during SSR). When a
-yeet component yields a function, that is the function which will be used for any
-consecutive re-renders. Anything that comes after `yield` will be executed once
-the components is removed from the DOM (e.g. replaced by another element).
+Generators are used to declare the lifecycle of yeet components. Only functions,
+html partials (returned by the `html` and `svg` tags) and promises carry any
+special meaning when using `yield`. When a yeet component yields a function,
+that is the function which will be used for any consecutive re-renders. Anything
+that comes after `yield` will be executed once the components is removed from
+the DOM (e.g. replaced by another element).
 
 ```js
 function MyComponent () {
@@ -229,10 +229,10 @@ function MyComponent () {
 ```
 
 They yielded function may also be a generator function. This can be used to
-perform side effects such as setting up subscriptions, manually changing the DOM
-or initializing some third party library. This is handled asynchrounous, meaning
-the DOM will have updated and the changes may have been made visible to the user
-before the generator finishes.
+perform side effects such as setting up subscriptions, manually manipulating the
+DOM or initializing some third party library. This is handled asynchrounously,
+meaning the DOM will have updated and the changes may have been made visible to
+the user before the generator finishes.
 
 ```js
 function MyComponent () {
@@ -244,7 +244,7 @@ function MyComponent () {
 }
 ```
 
-If you require immediate access to the rendered element, e.g. to synchronously
+If you require immediate access to the rendered element, e.g. to _synchronously_
 mutate or inspect the rendered element _before_ the page updates, you may yield
 yet another function.
 
@@ -292,18 +292,64 @@ html`
 `
 ```
 
+### Async components
+Components can yield any value but if you yield a Promise yeet will await the
+promise before continue rendering. On the server, rendering is asynchronous by
+design, this means that all promises are resolved as the component renders.
+Rendering in the browser behaves a little differently. While awaiting a promise
+nothing will be rendered in place of the component. Once all yielded promises
+have resolved (or rejected) the component will finish rendering and the element
+will appear on the page.
+
+Yeet does not make any difference between promises which resolve or reject, you
+will have to catch and handle rejections accordingly, yeet will just forward the
+resolved or rejected value.
+
+```js
+import fetch from 'cross-fetch'
+import { html, use } from 'yeet'
+
+function User (state, emit) {
+  const get = use(api) // ← Register api store with component
+  return function () {
+    //           ↓ Expose the promise to yeet
+    const user = yield get(`/users/${state.user.id}`)
+    return html`
+      <body>
+        <h1>${user.name}</h1>
+      </body>
+    `
+  }
+}
+
+function api (state, emit) {
+  if (!state.cache) state.cache = {} // ← Use existing cache if available
+
+  //     ↓ Return a function for lazily reading from the cache
+  return function (url) {
+    if (url in state.cache) return state.cache[url] // ← Read from cache
+    return fetch(url).then(async function (res) {
+      const data = await data.json()
+      state.cache[url] = data // ← Store response in cache
+      return data // ← Return repsonse
+    })
+  }
+}
+```
+
 #### Lists and Keys
 In most situations yeet does an excellent job at keeping track of which
 component goes where. This is in part handled by identifying which template tags
-(the `html` and `svg` tag functions) that are used. Template litterals are
-unique and yeet leverage this to keep track of which template tag goes where.
+(the `html` and `svg` tag functions) that are used. In JavaScript, template
+litterals are unique and yeet leverage this to keep track of which template tag
+goes where.
 
 When it comes to components, yeet use your component function as a unique key to
 keep track of which compontent is tied to which element in the DOM.
 
 When it comes to lists of identical components, this becomes difficult and yeet
 needs a helping hand in keeping track. In these situations, you can provide a
-unique key to each component which will be used to make sure that everything
+unique `key` to each component which will be used to make sure that everything
 keeps running smoothly.
 
 ```js
@@ -380,49 +426,12 @@ exception: the `render` event has special meaning and will re-render the closest
 component in the component tree. The `render` event does not bubble.
 
 ## Server rendering (SSR)
-Yeet has first class support for server rendering. Server rendering is dependent
-on the `stream` module and therefore only works in Node.js, at the moment. There
-are plans to support server rendered templates, meaning any backend could render
-the actual HTML and yeet would wire up functionality using the pre-existing
-markup.
+Yeet has first class support for server rendering. There are plans to support
+server rendered templates, meaning any backend could render the actual HTML and
+yeet would wire up functionality using the pre-existing markup.
 
-### Node.js
-Rendering on the server supports fully asynchronous components. Whereas
-components can `yield` anything, on the client only functions and html partials
-(produced by the `html` and `svg` tags) carry any special meaning, anything else
-yeet just ignores. If you yield promises however, on the server, yeet will wait
-for these promises to resolve while rendering.
-
-```js
-import { html, use } from 'yeet'
-
-function User (state, emit) {
-  const get = use(api) // ← Register api store with component
-  return function () {
-    //           ↓ Expose the promise to yeet during server render
-    const user = yield get(`/users/${state.user.id}`)
-    return html`<h1>${user ? user.name : 'Loading…'}</h1>`
-  }
-}
-
-function api (state, emit) {
-  if (!state.cache) state.cache = {} // ← Use existing cache if available
-
-  //     ↓ Return a function for lazyily reading from the cache
-  return function (url) {
-    if (url in state.cache) return state.cache[url] // ← Read from cache
-
-    const promise = fetchData(url).then(function (data) {
-      state.cache[url] = data // ← Store response in cache
-      emitter.emit('render') // ← Re-render with response in cache
-      return data // ← Return repsonse for server side rendering
-    })
-
-    // Only expose the promise while server side rendering
-    return typeof window === 'undefined' ? promise : null
-  }
-}
-```
+Rendering on the server supports fully asynchronous components. If a component
+yields promises, yeet will wait for these promises to resolve while rendering.
 
 ### Server rendered templates (non-Node.js)
 _Coming soon…_
@@ -585,17 +594,17 @@ selector and optionally a root state object.
 ```js
 import { html, mount } from 'https://cdn.skypack.dev/yeet'
 
-mount(html`
+mount('body', html`
   <body>
     <h1>Hello planet!</h1>
   </body>
-`, 'body')
+`)
 ```
 
 ```js
 import { html, mount, Component } from 'https://cdn.skypack.dev/yeet'
 
-mount(Component(Main), document.getElementById('app'), { name: 'world' })
+mount(document.getElementById('app'), Component(Main), { name: 'world' })
 
 function Main (state, emit) {
   return html`
@@ -607,16 +616,15 @@ function Main (state, emit) {
 ```
 
 ### render
-Render a partial to element (browser) or string (Node.js). On the client, render
-is sychronous and the resulting DOM node is returned. In Node.js `render` always
-returns a promise which resolves to a string. Accepts an optinoal root state
-object.
+Render a partial to element (browser) or string (server). On the client, render
+is sychronous and the resulting DOM node is returned. On the server `render`
+always returns a promise which resolves to a string. Accepts an optional root
+state object.
 
 ```js
 import { html, render } from 'https://cdn.skypack.dev/yeet'
 
 const h1 = render(html`<h1>Hello planet!</h1>`))
-
 document.body.appendChild(h1)
 ```
 
@@ -630,16 +638,14 @@ createServer(async function (req, res) {
 }).listen(8080)
 ```
 
-### renderToStream
-In Node.js you may render a partial to a readable stream.
-
 ```js
-import { html, renderToStream } from 'yeet'
-import fs from 'fs'
+import { Readable } from 'stream'
+import { html, render } from 'yeet'
+import { createServer } from 'http'
 
-const stream = renderToStream(html`<body>Hello world!</body>`)
-
-stream.pipe(fs.createWriteStream('index.html'))
+createServer(async function (req, res) {
+  Readable.from(html`<body>Hello world!</body>`).pipe(res)
+}).listen(8080)
 ```
 
 ### Component
@@ -671,8 +677,8 @@ render(Component(Greeting, { phrase: 'Howdy' }, 'planet'))
 // → <p>Howdy planet!</p>
 
 const Greeter = Component(Greeting)
-render(Greeter({ phrase: 'Nice to meet you' }))
-// → <p>Nice to meet you world!</p>
+render(Greeter({ phrase: 'Nice to meet you,' }))
+// → <p>Nice to meet you, world!</p>
 ```
 
 ### EventEmitter
