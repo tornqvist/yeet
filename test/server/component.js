@@ -46,6 +46,30 @@ api('can render to stream', async function () {
   assert.is(string, '<div>Hello world!</div>')
 })
 
+api('can be declared with arguments', async function () {
+  const MyComponent = Component(Main, 'world')
+  await render(MyComponent)
+  function Main () {
+    return (name) => assert.is(name, 'world')
+  }
+})
+
+api('can be called with arguments', async function () {
+  const MyComponent = Component(Main)
+  await render(MyComponent('world'))
+  function Main () {
+    return (name) => assert.is(name, 'world')
+  }
+})
+
+api('calling arguments override declaration arguments', async function () {
+  const MyComponent = Component(Main, 'world')
+  await render(MyComponent('planet'))
+  function Main () {
+    return (name) => assert.is(name, 'planet')
+  }
+})
+
 api('can mount', async function () {
   const res = mount('body', Component(Main))
   assert.is(res.selector, 'body')

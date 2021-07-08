@@ -135,7 +135,6 @@ export function render (partial, state = {}) {
  * @returns {Node}
  */
 export function mount (node, partial, state = {}) {
-  partial = call(partial)
   if (typeof node === 'string') node = document.querySelector(node)
   const cached = cache.get(node)
   if (cached?.key === partial.key) {
@@ -160,13 +159,12 @@ export function mount (node, partial, state = {}) {
  * @returns {function(...any): Component} Component render function
  */
 export function Component (fn, ...args) {
-  if (this instanceof Component) {
-    this.fn = fn
-    this.args = args
-    this.key = args[0]?.key || fn
-    return this
-  }
-  return (...args) => new Component(fn, ...args)
+  const props = { fn, args, key: args[0]?.key || fn }
+  if (this instanceof Component) return assign(this, props)
+  return Object.setPrototypeOf(assign(function Render (..._args) {
+    if (!_args.length) _args = args
+    return new Component(fn, ..._args)
+  }, props), Component.prototype)
 }
 Component.prototype = create(Partial.prototype)
 Component.prototype.constructor = Component
@@ -225,12 +223,11 @@ function morph (partial, ctx, node) {
     template.childNodes.forEach(function eachChild (child, index) {
       if (isPlaceholder(child)) {
         const id = getPlaceholderId(child)
-        const value = call(partial.values[id])
+        const value = partial.values[id]
         const oldChild = pluck(value, oldChildren)
         child = new Child(oldChild, index, children, node)
         transform(child, value, ctx)
         editors.push(function editor (partial) {
-          partial = call(partial)
           const isComponent = partial instanceof Component
           transform(child, isComponent ? partial : partial.values[id], ctx)
         })
@@ -332,15 +329,12 @@ function createAttributeEditor (template, node) {
  * @param {Context} ctx Current render context
  */
 function transform (child, value, ctx) {
-  value = call(value)
-
   if (!value) return upsert(child, null)
 
   const pick = pool(child.node)
 
   if (isArray(value)) {
     const newNode = value.flat().reduce(function (order, value, index) {
-      value = call(value)
       let node = pick(value)
       while (node instanceof Child) node = node.node
       const newChild = new Child(node, index, order, child)

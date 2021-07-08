@@ -97,7 +97,6 @@ export function mount (selector, partial, state = {}) {
  * @returns {Promise}
  */
 export async function render (partial, state = {}) {
-  if (typeof partial === 'function') partial = partial()
   if (partial instanceof Component) partial = await unwrap(partial, state)
   if (!(partial instanceof Partial)) return Promise.resolve(partial)
 
@@ -158,12 +157,12 @@ export class Partial {
  * @returns {function(...any): Component} Component render function
  */
 export function Component (fn, ...args) {
-  if (this instanceof Component) {
-    this.fn = fn
-    this.args = args
-    return this
-  }
-  return (...args) => new Component(fn, ...args)
+  const props = { fn, args, key: args[0]?.key || fn }
+  if (this instanceof Component) return Object.assign(this, props)
+  return Object.setPrototypeOf(Object.assign(function Render (..._args) {
+    if (!_args.length) _args = args
+    return new Component(fn, ..._args)
+  }, props), Component.prototype)
 }
 Component.prototype = Object.create(Partial.prototype)
 Component.prototype.constructor = Component
@@ -251,7 +250,6 @@ async function * resolve (value, state) {
     return
   }
 
-  if (typeof value === 'function') value = value()
   if (value instanceof Component) value = await unwrap(value, state)
   if (value instanceof Partial) {
     yield * parse(value, state)

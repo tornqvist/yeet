@@ -43,6 +43,30 @@ args('are forwarded', function () {
   render(MyComponent('test'))
 })
 
+args('can be provided on declaration', function () {
+  const MyComponent = Component(Main, 'world')
+  render(MyComponent)
+  function Main () {
+    return (name) => assert.is(name, 'world')
+  }
+})
+
+args('can be supplied when calling', function () {
+  const MyComponent = Component(Main)
+  render(MyComponent('world'))
+  function Main () {
+    return (name) => assert.is(name, 'world')
+  }
+})
+
+args('provided when called override declaration arguments', function () {
+  const MyComponent = Component(Main, 'world')
+  render(MyComponent('planet'))
+  function Main () {
+    return (name) => assert.is(name, 'planet')
+  }
+})
+
 state('is inherited', function () {
   render(html`
     <div>
