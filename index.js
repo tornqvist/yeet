@@ -169,6 +169,12 @@ export function Component (fn, ...args) {
 Component.prototype = create(Partial.prototype)
 Component.prototype.constructor = Component
 
+const mem = new WeakMap()
+export function memo (partial, key = partial.values) {
+  mem.set(partial, isArray(key) ? key : [key])
+  return partial
+}
+
 /**
  * Render partial, optionally onto an existing node
  * @export
@@ -180,6 +186,7 @@ Component.prototype.constructor = Component
 function morph (partial, ctx, node) {
   const { editors } = ctx
   const template = partial instanceof Partial ? parse(partial) : toNode(partial)
+  if (mem.has(partial)) ctx.memo = mem.get(partial)
 
   return fromTemplate(template, node)
 
@@ -257,7 +264,8 @@ function createAttributeEditor (template, node) {
   const placeholders = []
   const fixed = []
 
-  for (const { name, value } of template.attributes) {
+  for (let i = 0, len = template.attributes.length; i < len; i++) {
+    const { name, value } = template.attributes[i]
     if (PLACEHOLDER.test(name) || PLACEHOLDER.test(value)) {
       placeholders.push({ name, value })
       node.removeAttribute(name)
@@ -311,7 +319,8 @@ function createAttributeEditor (template, node) {
     }
 
     const allowed = keys(attrs).concat(fixed)
-    for (const { name } of node.attributes) {
+    for (let i = 0, len = node.attributes.length; i < len; i++) {
+      const { name } = node.attributes[i]
       if (!allowed.includes(name)) {
         if (name in node) {
           node[name] = typeof node[name] === 'boolean' ? false : ''
@@ -334,7 +343,7 @@ function transform (child, value, ctx) {
   const pick = pool(child.node)
 
   if (isArray(value)) {
-    const newNode = value.flat().reduce(function (order, value, index) {
+    child.node = value.flat().reduce(function (order, value, index) {
       let node = pick(value)
       while (node instanceof Child) node = node.node
       const newChild = new Child(node, index, order, child)
@@ -342,7 +351,7 @@ function transform (child, value, ctx) {
       order.push(newChild)
       return order
     }, [])
-    upsert(child, newNode)
+    // upsert(child, newNode)
     return
   }
 
@@ -487,9 +496,9 @@ function upsert (child, newNode) {
         while (_oldNode instanceof Child) _oldNode = _oldNode.node
         return _oldNode === _node
       })
-      if (oldIndex !== -1) oldNode.splice(oldIndex, 1)
+      // if (oldIndex !== -1) oldNode.splice(oldIndex, 1)
 
-      putInPlace(_node, _index, newNode)
+      if (_index !== oldIndex) putInPlace(_node, _index, newNode)
     })
 
     remove(oldNode)
@@ -527,6 +536,15 @@ function upsert (child, newNode) {
  * @param {Partial} partial Partial with which to update
  */
 function update (ctx, partial) {
+  if (mem.has(partial)) {
+    const { memo } = ctx
+    const key = mem.get(partial)
+    if (memo && (key.length !== memo.length || key.every((value, index) => value === memo[index]))) {
+      return
+    } else {
+      ctx.memo = key
+    }
+  }
   try {
     stack.unshift(ctx.state)
     for (const editor of ctx.editors) editor(partial)
@@ -613,25 +631,26 @@ function pool (nodes) {
  */
 function pluck (value, list) {
   if (!value) return null
+  const isPartial = value instanceof Partial
   for (let i = 0, len = list.length; i < len; i++) {
     let isMatch
     const child = list[i]
     const node = child instanceof Child ? child.node : child
     const cached = cache.get(node)
     if (!node) continue
-    if (isArray(node) && !cached) return pluck(value, node)
-    if (value instanceof Partial) {
+    if (isPartial) {
       isMatch = cached?.key === value.key
       if (!isMatch) {
         if (cached) continue
         value = parse(value)
       }
-    } else {
-      if (cached) continue
-      else if (child === value) isMatch = true
+    } else if (cached) {
+      continue
+    } else if (isArray(node)) {
+      return pluck(value, node)
     }
-    if (!isMatch) isMatch = node.nodeName === toNode(value).nodeName
-    if (isMatch && (node.id || value.id)) isMatch = node.id === value.id
+    if (!isMatch) isMatch = node.nodeName === (value.nodeName || '#text')
+    if (isMatch && !isPartial && (node.id || value.id)) isMatch = node.id === value.id
     if (isMatch) return list.splice(i, 1)[0]
   }
   return null

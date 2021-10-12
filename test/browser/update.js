@@ -46,6 +46,29 @@ reuse('children in same place', function () {
   }
 })
 
+reuse('partials in same place with dynamic id', function () {
+  const items = Array(3).fill(null)
+  const ul = document.createElement('ul')
+
+  mount(ul, main())
+  const children = [...ul.childNodes]
+
+  mount(ul, main())
+  assert.is(ul.childNodes[0], children[0])
+  assert.is(ul.childNodes[1], children[1])
+  assert.is(ul.childNodes[2], children[2])
+
+  function main () {
+    return html`
+      <ul>
+        ${items.map((_, index) => html`
+          <li id="item-${index}">${index + 1}</li>
+        `)}
+      </ul>
+    `
+  }
+})
+
 types('can be nested array', function () {
   const ul = render(html`
     <ul>${[

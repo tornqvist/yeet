@@ -1,0 +1,55 @@
+<!doctype html>
+<html>
+<head>
+  <title>Rewrite</title>
+</head>
+<body>
+  <script type="module">
+    import { render, mount, html } from '/rewrite.js'
+
+    const div = document.createElement('div')
+    // div.innerHTML = '<h1>Hello world!</h1>'
+    div.append(render(Greeting()))
+    document.body.prepend(div)
+
+    const h1 = div.firstElementChild
+    const oldChildren = [...div.firstElementChild.childNodes]
+
+    mount(div, Greeting())
+
+    const newChildren = [...div.firstElementChild.childNodes]
+
+    console.assert(div.isSameNode(document.body.firstElementChild))
+    console.assert(h1.isSameNode(div.firstElementChild))
+    console.assert(h1.childNodes.length === 3)
+    console.assert(oldChildren.every(function (oldChild, index) {
+      return oldChild.isSameNode(newChildren[index])
+    }))
+
+    // mount(div, html``)
+    // mount(div, Greeting())
+
+    function Suspense (component, fallback) {
+      return Component(function (state, emit) {
+        return function (...args) {
+          const res = fn(...args)
+          return res || fallback(...args)
+        }
+      })
+    }
+
+    const Greeting = Suspense(Greeting, () => html`<p>Loading…</p>`)
+
+    function * Greeting (state, emit) {
+      yield function * () {
+        const { name } = yield state.api('/user')
+        return html`<h1>${['Hello ', html`world`]}!</h1>`
+      }
+      console.log('Unmounted')
+    }
+    // function Greeting () {
+    //   return html`<h1>${['Hello ', html`world`]}!</h1>`
+    // }
+  </script>
+</body>
+</html>
