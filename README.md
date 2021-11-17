@@ -30,7 +30,7 @@
 </div>
 
 ## Features
-- **No transpilation** – it's all plain vanilla JavaScript
+- **No transpilation** – It's all plain vanilla JavaScript
 - **Small size** – Weighing in at `3kb`, you'll barely notice it
 - **Minimal API** – Only a handfull functions to learn
 - **No magic** – Prototypal state and events
@@ -84,7 +84,7 @@ The state object in yeet is shared between components using prototypes. You can
 think of the state object as a shared context which components can use to read
 from and write to.
 
-However, a component can only ever mutate it's own state, it can only read from
+However, a component can only ever mutate its own state, it can only read from
 the parent state, yet they are the same object – what?! This is achieved using
 prototypes. The prototype of a component's state object is the parent
 component's state object.
@@ -93,7 +93,7 @@ component's state object.
 <summary>About prototypal inheritance</summary>
 
 JavaScript prototypes are the mechanism for inheriting properties and behavior
-from one object to another. What is facinating about prototypes are that they
+from one object to another. What is facinating about prototypes is that they
 are live – meaning that any change made to an object is immediately made
 available to all other objects whose prototype chain includes said object.
 
@@ -290,7 +290,7 @@ html`
 
 ### Async components
 Components can yield any value but if you yield a Promise yeet will await the
-promise before continue rendering. On the server, rendering is asynchronous by
+promise before it continues to render. On the server, rendering is asynchronous by
 design, this means that all promises are resolved as the component renders.
 Rendering in the browser behaves a little differently. While awaiting a promise
 nothing will be rendered in place of the component. Once all yielded promises
@@ -336,12 +336,12 @@ function api (state, emit) {
 #### Lists and Keys
 In most situations yeet does an excellent job at keeping track of which
 component goes where. This is in part handled by identifying which template tags
-(the `html` and `svg` tag functions) that are used. In JavaScript, template
-litterals are unique and yeet leverage this to keep track of which template tag
+(the `html` and `svg` tag functions) are used. In JavaScript, template
+literals are unique and yeet leverages this to keep track of which template tag
 goes where.
 
-When it comes to components, yeet use your component function as a unique key to
-keep track of which compontent is tied to which element in the DOM.
+When it comes to components, yeet uses your component function as a unique key to
+keep track of which component is tied to which element in the DOM.
 
 When it comes to lists of identical components, this becomes difficult and yeet
 needs a helping hand in keeping track. In these situations, you can provide a
@@ -422,8 +422,8 @@ exception: the `render` event has special meaning and will re-render the closest
 component in the component tree. The `render` event does not bubble.
 
 ## Server rendering (SSR)
-Yeet has first class support for server rendering. There are plans to support
-server rendered templates, meaning any backend could render the actual HTML and
+Yeet has first-class support for server rendering. There are plans to support
+server-rendered templates, meaning any backend could render the actual HTML and
 yeet would wire up functionality using the pre-existing markup.
 
 Rendering on the server supports fully asynchronous components. If a component
@@ -469,7 +469,7 @@ html`<button onclick=${() => alert('You clicked me!')}>Click me!</button>`
 
 #### Arrays
 If you have lists of things you want to render as elements, interpolating arrays
-work just like you'd expect.
+works just like you'd expect.
 
 ```js
 import { html } from 'https://cdn.skypack.dev/yeet@next'
@@ -480,7 +480,7 @@ html`<ol>${list.map((num) => html`<li>${num}</li>`)}</ol>`
 
 #### Fragments
 It's not always that you can or need to have an outer containing element.
-Rendering fragments work just like single container elements.
+Rendering fragments works just like single container elements.
 
 ```js
 import { html } from 'https://cdn.skypack.dev/yeet@next'
@@ -493,8 +493,8 @@ html`
 
 ### svg
 The `svg` tag is required for rendering all kinds of SVG elements, such as
-`<svg>`, `<path>`, `<circle>` etc. All the same kinds behaviors as described in
-[`html`](#html) applies to `svg`.
+`<svg>`, `<path>`, `<circle>` etc. All the same kinds of behaviors as described in
+[`html`](#html) apply to `svg`.
 
 ```js
 import { svg } from 'https://cdn.skypack.dev/yeet@next'
@@ -584,7 +584,7 @@ function pauser (video) {
 ```
 
 ### mount
-Mount a given html partial on dom node. Accepts a html partial, a DOM node or
+Mount a given html partial on a DOM node. Accepts a html partial, a DOM node or
 selector and optionally a root state object.
 
 ```js
@@ -613,7 +613,7 @@ function Main (state, emit) {
 
 ### render
 Render a partial to element (browser) or string (server). On the client, render
-is sychronous and the resulting DOM node is returned. On the server `render`
+is synchronous and the resulting DOM node is returned. On the server `render`
 always returns a promise which resolves to a string. Accepts an optional root
 state object.
 
@@ -680,9 +680,9 @@ render(Greeter({ phrase: 'Nice to meet you,' }))
 ### EventEmitter
 Stores are called with state and an event emitter. The event emitter can be used
 to act on events submitted from e.g. user actions. All events except the
-`render` even bubbles up the component tree.
+`render` event bubbles up the component tree.
 
-You can register a catch-all event listerner by attaching a listener for the `*`
+You can register a catch-all event listener by attaching a listener for the `*`
 event. The first argument to catch-all listeners is the event name followed by
 the event arguments.
 
@@ -704,11 +704,11 @@ Emit an event of the specified name accompanied by any number of arguments.
 ## Attribution
 There wouldn't be a yeet if there hadn't been a [choo][choo]. Yeet borrows a lot
 of the core concepts such as a shared state and event emitter from choo. The
-idea of performant DOM updates based on template litterals was born from proof
-of conept work done by [Renée Kooi][goto-bus-stop].
+idea of performant DOM updates based on template literals was born from proof
+of concept work done by [Renée Kooi][goto-bus-stop].
 
 ## TODO
-[ ] Server rendered templates (non-Node.js)
+[ ] Server-rendered templates (non-Node.js)
 
 [choo]: https://github.com/choojs/choo
 [goto-bus-stop]: https://github.com/goto-bus-stop
