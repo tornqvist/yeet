@@ -215,7 +215,7 @@ that comes after `yield` will be executed once the components is removed from
 the DOM (e.g. replaced by another element).
 
 ```js
-function MyComponent () {
+function * MyComponent () {
   // Happens only once, during setup
   yield function () {
     // Happens every time the component updates
