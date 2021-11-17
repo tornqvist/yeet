@@ -38,7 +38,7 @@
 
 ## Example
 ```js
-import { html, mount, use, Component } from 'https://cdn.skypack.dev/yeet'
+import { html, mount, use, Component } from 'https://cdn.skypack.dev/yeet@next'
 
 mount('body', Component(App))
 
@@ -138,7 +138,7 @@ which persist throughout the component lifespan without meddling with `this` or
 learning new state management techinques, they're just regular ol' variables.
 
 ```js
-import { html, ref, mount, Component } from 'https://cdn.skypack.dev/yeet'
+import { html, ref, mount, Component } from 'https://cdn.skypack.dev/yeet@next'
 import mapboxgl from 'https://cdn.skypack.dev/mapbox-gl'
 
 const state = { center: [18.0704503, 59.3244897] }
@@ -379,7 +379,7 @@ Stores are the mechanism for sharing behavior between components, or even apps.
 A store can subscribe to events, mutate the local state and issue re-renders.
 
 ```js
-import { html, use, Component } from 'https://cdn.skypack.dev/yeet'
+import { html, use, Component } from 'https://cdn.skypack.dev/yeet@next'
 
 function Parent (state, emit) {
   use(counter) // ← Use the counter store with this component
@@ -439,7 +439,7 @@ The API is intentionally small.
 Create html partials which can be rendered to DOM nodes (or strings in Node.js).
 
 ```js
-import { html } from 'https://cdn.skypack.dev/yeet'
+import { html } from 'https://cdn.skypack.dev/yeet@next'
 
 const name = 'planet'
 html`<h1>Hello ${name}!</h1>`
@@ -451,7 +451,7 @@ will be joined with an empty space (` `) to make it easier to work with many
 space separated attributes, e.g. `class`.
 
 ```js
-import { html } from 'https://cdn.skypack.dev/yeet'
+import { html } from 'https://cdn.skypack.dev/yeet@next'
 
 const attrs = { disabled: true, hidden: false, placeholder: null }
 html`<input type="text" class="${['foo', 'bar']}" ${attrs}>`
@@ -462,7 +462,7 @@ html`<input type="text" class="${['foo', 'bar']}" ${attrs}>`
 Events can be attached to elements using the standard `on`-prefix.
 
 ```js
-import { html } from 'https://cdn.skypack.dev/yeet'
+import { html } from 'https://cdn.skypack.dev/yeet@next'
 
 html`<button onclick=${() => alert('You clicked me!')}>Click me!</button>`
 ```
@@ -472,7 +472,7 @@ If you have lists of things you want to render as elements, interpolating arrays
 work just like you'd expect.
 
 ```js
-import { html } from 'https://cdn.skypack.dev/yeet'
+import { html } from 'https://cdn.skypack.dev/yeet@next'
 
 const list = [1, 2, 3]
 html`<ol>${list.map((num) => html`<li>${num}</li>`)}</ol>`
@@ -483,7 +483,7 @@ It's not always that you can or need to have an outer containing element.
 Rendering fragments work just like single container elements.
 
 ```js
-import { html } from 'https://cdn.skypack.dev/yeet'
+import { html } from 'https://cdn.skypack.dev/yeet@next'
 
 html`
   <h1>Hello world!</h1>
@@ -497,7 +497,7 @@ The `svg` tag is required for rendering all kinds of SVG elements, such as
 [`html`](#html) applies to `svg`.
 
 ```js
-import { svg } from 'https://cdn.skypack.dev/yeet'
+import { svg } from 'https://cdn.skypack.dev/yeet@next'
 
 svg`
   <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
@@ -513,7 +513,7 @@ automatically escaped to avoid common [XXS attacks][xxs], e.g. injecting script
 tags.
 
 ```js
-import { html, raw } from 'https://cdn.skypack.dev/yeet'
+import { html, raw } from 'https://cdn.skypack.dev/yeet@next'
 
 const content = '<strong>Hello world!</strong>'
 
@@ -534,7 +534,7 @@ _Note: This only works in the client, `current` will never be available while
 server rendering._
 
 ```js
-import { html, ref, render } from 'https://cdn.skypack.dev/yeet'
+import { html, ref, render } from 'https://cdn.skypack.dev/yeet@next'
 
 const div = ref()
 render(html`<div ref=${div}>Hello planet!</div>`)
@@ -553,7 +553,7 @@ can be used to handle common operations on the shared state object or just to
 avoid duplicating code between components.
 
 ```js
-import { html, use, ref } from 'https://cdn.skypack.dev/yeet'
+import { html, use, ref } from 'https://cdn.skypack.dev/yeet@next'
 
 function Video * (state, emit) {
   const video = ref()
@@ -588,7 +588,7 @@ Mount a given html partial on dom node. Accepts a html partial, a DOM node or
 selector and optionally a root state object.
 
 ```js
-import { html, mount } from 'https://cdn.skypack.dev/yeet'
+import { html, mount } from 'https://cdn.skypack.dev/yeet@next'
 
 mount('body', html`
   <body>
@@ -598,7 +598,7 @@ mount('body', html`
 ```
 
 ```js
-import { html, mount, Component } from 'https://cdn.skypack.dev/yeet'
+import { html, mount, Component } from 'https://cdn.skypack.dev/yeet@next'
 
 mount(document.getElementById('app'), Component(Main), { name: 'world' })
 
@@ -618,7 +618,7 @@ always returns a promise which resolves to a string. Accepts an optional root
 state object.
 
 ```js
-import { html, render } from 'https://cdn.skypack.dev/yeet'
+import { html, render } from 'https://cdn.skypack.dev/yeet@next'
 
 const h1 = render(html`<h1>Hello planet!</h1>`))
 document.body.appendChild(h1)
@@ -655,7 +655,7 @@ It is best practice to provide an object as the first render argument since the
 optional `key` property is extracted from the first render argument.
 
 ```js
-import { html, render, Component } from 'https://cdn.skypack.dev/yeet'
+import { html, render, Component } from 'https://cdn.skypack.dev/yeet@next'
 
 function Greeting () {
   return function (props, name = 'world') {
