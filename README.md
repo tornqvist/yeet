@@ -8,17 +8,13 @@
   </a>
   <!-- NPM version -->
   <a href="https://npmjs.org/package/yeet">
-    <img src="https://img.shields.io/npm/v/yeet.svg?style=flat-square"
+    <img src="https://img.shields.io/npm/v/yeet/next.svg?style=flat-square"
       alt="NPM version" />
   </a>
   <!-- Build Status -->
   <a href="https://github.com/tornqvist/yeet/actions">
     <img src="https://img.shields.io/github/workflow/status/tornqvist/yeet/CI?style=flat-square"
       alt="Build Status" />
-  </a>
-  <!-- Size -->
-  <a href="https://npmjs.org/package/yeet">
-    <img src="https://img.shields.io/bundlephobia/minzip/yeet?label=size&style=flat-square">
   </a>
   <!-- Downloads -->
   <a href="https://npmjs.org/package/yeet">
