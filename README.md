@@ -555,7 +555,7 @@ avoid duplicating code between components.
 ```js
 import { html, use, ref } from 'https://cdn.skypack.dev/yeet@next'
 
-function Video * (state, emit) {
+function * Video (state, emit) {
   const video = ref()
   const detach = use(pauser(video))
 
@@ -680,7 +680,7 @@ render(Greeter({ phrase: 'Nice to meet you,' }))
 ### EventEmitter
 Stores are called with state and an event emitter. The event emitter can be used
 to act on events submitted from e.g. user actions. All events except the
-`render` even bubbles up the component tree.
+`render` event bubbles up the component tree.
 
 You can register a catch-all event listerner by attaching a listener for the `*`
 event. The first argument to catch-all listeners is the event name followed by
