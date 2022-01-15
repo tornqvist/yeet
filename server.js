@@ -48,7 +48,7 @@ export function use (fn) {
 /**
  * Create HTML partial
  * @export
- * @param {Array<string>} strings Template literal strings
+ * @param {string[]} strings Template literal strings
  * @param {...any} values Template literal values
  * @returns {Partial}
  */
@@ -59,7 +59,7 @@ export function html (strings, ...values) {
 /**
  * Create SVG partial
  * @export
- * @param {Array<string>} strings Template literal strings
+ * @param {string[]} strings Template literal strings
  * @param {...any} values Template literal values
  * @returns {Partial}
  */

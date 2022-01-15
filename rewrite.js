@@ -1,4 +1,10 @@
-import { Partial, Ref } from './shared.js'
+import { Partial } from './partial.js'
+import { Ref } from './ref.js'
+
+/**
+ * @callback Editor
+ * @param {Partial} partial
+ */
 
 /**
  * Create HTML partial
@@ -43,4 +49,4 @@ export function ref () {
 
 export { Component } from './component.js'
 export { render } from './render.js'
-export { mount } from './mount.js'
+// export { mount } from './mount.js'

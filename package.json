@@ -27,9 +27,8 @@
   "author": "Carl Törnqvist <carl@tornqv.ist>",
   "license": "MIT",
   "devDependencies": {
-    "rollup": "^2.40.0",
-    "standard": "^16.0.3",
+    "standard": "^16.0.4",
     "umu": "^0.0.2",
-    "uvu": "^0.5.1"
+    "uvu": "^0.5.2"
   }
 }

@@ -1,8 +1,6 @@
 import {
   FRAGMENT_NODE,
   ELEMENT_NODE,
-  Context,
-  Partial,
   cache,
   update,
   toNode,
@@ -12,10 +10,11 @@ import {
   isPlaceholder,
   getPlaceholderId,
   createAttributeEditor
-} from './shared.js'
-import { parse } from './parse.js'
+} from './utils.js'
 import { morph } from './morph.js'
 import { render } from './render.js'
+import { Context } from './context.js'
+import { Partial, parse } from './partial.js'
 import { Component, unwind } from './component.js'
 
 export function mount (node, partial, state = {}) {

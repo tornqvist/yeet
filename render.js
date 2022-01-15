@@ -1,23 +1,60 @@
 import {
   ELEMENT_NODE,
-  Context,
-  cache,
+  update,
+  remove,
+  replace,
   isArray,
+  findFrom,
   isPlaceholder,
   getPlaceholderId,
   createAttributeEditor
-} from './shared.js'
-import { parse } from './parse.js'
+} from './utils.js'
 import { morph } from './morph.js'
-import { Component, unwind } from './component.js'
+import { parse } from './partial.js'
+import { Context, cache } from './context.js'
+import { Component, initialize } from './component.js'
 
-export function render (partial, state = {}) {
+/**
+ * Render partial as child to given node
+ * @param {Partial} partial A partial to render
+ * @param {Node} parent The node to render to
+ * @param {object} state The root state
+ * @returns {Node|Promise<Node>}
+ */
+export function render (partial, parent, state = {}) {
+  let current
   const ctx = new Context(partial.key, state)
 
-  if (partial instanceof Component) {
-    partial = unwind(partial, ctx)
-  }
+  // if (partial instanceof Component) {
+  //   partial = initialize(partial, ctx, function (partial, _ctx = ctx) {
 
+  //   })
+  // }
+
+  const node = _render(partial, ctx)
+  cache.set(node, ctx)
+  onupdate(node)
+  return node
+
+  function onupdate (children) {
+    if (children) {
+      if (!isArray(children)) children = [children]
+      if (current) replace(current, children)
+      else parent.append(...children)
+    } else if (current) {
+      remove(current)
+    }
+    current = children
+  }
+}
+
+/**
+ * Render partial to node
+ * @param {Partial} partial Render partial to node
+ * @param {Context} ctx Partial context
+ * @returns {Node}
+ */
+function _render (partial, ctx) {
   const template = parse(partial)
   const node = template.cloneNode(true)
 
@@ -25,59 +62,82 @@ export function render (partial, state = {}) {
   let current = walker.nextNode()
 
   if (template.nodeType === ELEMENT_NODE) {
-    const editor = createAttributeEditor(template, node)
-    if (editor) {
-      ctx.editors.push(editor)
-      editor(partial)
-    }
+    const editor = createAttributeEditor(node)
+    if (editor) ctx.editors.push(editor)
   }
 
   while (current) {
     if (isPlaceholder(current)) {
-      const id = getPlaceholderId(current)
-      const onchange = handlePlaceholder(current, ctx)
-      onchange(partial.values[id])
-      ctx.editors.push(function (value) {
-        onchange(value.values[id])
-      })
+      ctx.editors.push(createNodeEditor(current, ctx))
     } else if (current.nodeType === ELEMENT_NODE) {
-      const editor = createAttributeEditor(node)
-      if (editor) {
-        ctx.editors.push(editor)
-        editor(partial)
-      }
+      const editor = createAttributeEditor(current)
+      if (editor) ctx.editors.push(editor)
     }
     current = walker.nextNode()
   }
 
-  cache.set(node, ctx)
+  update(ctx, partial)
 
   return node
 }
 
-const map = new WeakMap()
-function handlePlaceholder (placeholder, ctx) {
+/** @type {WeakMap<Node, Node[]>} */
+const childNodes = new WeakMap()
+
+/**
+ * Create a node editor
+ * @param {Node} placeholder Placeholder node
+ * @param {Context} ctx Parent context
+ * @returns {import('./context.js').Editor}
+ */
+function createNodeEditor (placeholder, ctx) {
+  const id = getPlaceholderId(placeholder)
   const parent = placeholder.parentNode
-  let children = map.get(parent)
-  if (!children) map.set(parent, children = [...parent.childNodes])
+
+  // Read childNodes from cache to prevent excessive duplication
+  let children = childNodes.get(parent)
+  if (!children) childNodes.set(parent, children = [...parent.childNodes])
   const index = children.indexOf(placeholder)
 
-  return onchange
+  return nodeEditor
 
-  function onchange (value) {
-    const next = getNext(index, children)
-    children[index] = morph(children[index], value, parent, next, resolve)
+  /** @type {import('./context.js').Editor} */
+  function nodeEditor (partial) {
+    onupdate(partial.values[id], ctx)
   }
 
-  function resolve (partial) {
-    return render(partial, Object.create(ctx.state), onchange)
-  }
-}
+  /**
+   * editor will call morph which find the matching node to be removed,
+   * calls update with the old node/component which will remove the node,
+   * and then finish up the onupdate call restoring the previous state
+   */
 
-function getNext (index, list) {
-  for (let next, i = index + 1, len = list.length; i < len; i++) {
-    next = list[i]
-    if (isArray(next)) next = getNext(0, next)
-    if (next) return next
+  /**
+   * Update child at index
+   * @param {any} value New child
+   */
+  function onupdate (newChild, ctx) {
+    const next = findFrom(index + 1, children)
+    children[index] = morph(children[index], newChild, parent, next, resolve)
+  }
+
+  /**
+   * Resolve partial to node or null
+   * @param {Partial} partial A partial to resolve to node
+   * @returns {any}
+   */
+  function resolve (partial, child = ctx.spawn(partial.key)) {
+    const node = partial instanceof Component
+      ? initialize(partial, child, _render, function replace (newChild, child) {
+          const next = findFrom(index + 1, children)
+          children[index] = morph(children[index], newChild, parent, next, function (partial) {
+            return resolve(partial, child)
+          })
+        })
+      : _render(partial, child)
+
+    if (node) cache.set(node, child)
+
+    return node
   }
 }

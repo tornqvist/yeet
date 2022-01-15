@@ -1,5 +1,4 @@
-import { isPlaceholder } from './shared.js'
-import { Component } from './component.js'
+import { isPlaceholder } from './utils.js'
 
 const TAG = /<[a-z-]+ [^>]+$/i
 const COMMENT = /<!--(?!.*-->)/
@@ -11,7 +10,23 @@ const ATTRIBUTE = /<[a-z-]+[^>]*?\s+(([^\t\n\f "'>/=]+)=("|')?)?$/i
 const templates = new WeakMap()
 
 /**
+ * Create a HTML partial object
+ * @export
+ * @class Partial
+ * @param {Array<string>} strings Template strings
+ * @param {Array<any>} values Template partials
+ * @param {Boolean} isSVG Whether the partial is an SVG node
+ */
+export function Partial (strings, values, isSVG = false) {
+  this.key = strings
+  this.strings = strings
+  this.values = values
+  this.isSVG = isSVG
+}
+
+/**
  * Parse partial
+ * @export
  * @param {Partial} partial The partial to parse
  * @returns {Node}
  */
