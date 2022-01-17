@@ -8,6 +8,7 @@ import {
 import { Slot } from './slot.js'
 import { cache } from './context.js'
 import { Partial } from './partial.js'
+import { Fragment } from './fragment.js'
 
 /** @typedef {import('./context.js').Context} Context */
 
@@ -17,7 +18,7 @@ import { Partial } from './partial.js'
  * @param {Slot} slot Current slot
  * @param {any[] | any} newChildren New children
  */
-export function morph (ctx, slot, newChildren) {
+export function morph (slot, newChildren, render) {
   // Do not mutate any existing arrays
   newChildren = isArray(newChildren) ? [...newChildren] : [newChildren]
   const oldChildren = [...slot.children]
@@ -69,14 +70,11 @@ export function morph (ctx, slot, newChildren) {
         continue
       } else {
         // Otherwise, create a new child
-        const child = ctx.spawn(key)
-        newChild = newChild.render(child, function onupdate (value) {
+        newChild = render(newChild, function onupdate (value, render) {
           const children = [...slot.children]
           children[i] = value
-          if (value) cache.set(value, child)
-          morph(ctx, slot, children)
+          morph(slot, children, render)
         })
-        if (newChild) cache.set(newChild, child)
       }
     } else {
       // Reuse text nodes if possible
@@ -94,12 +92,14 @@ export function morph (ctx, slot, newChildren) {
 
     // Replace/remove/insert new child
     if (newChild != null) {
+      const args = getChilden(newChild)
       if (!oldChild) {
-        const next = findNext(slot)
-        if (next) next.before(newChild)
-        else slot.parent.append(newChild)
+        const next = findNext(slot.siblings, slot.index + 1)
+        if (next) next.before(...args)
+        else slot.parent.append(...args)
       } else if (newChild !== oldChild) {
-        oldChild.before(newChild)
+        const next = findNext([oldChild])
+        next.before(...args)
       }
     }
 
@@ -108,9 +108,19 @@ export function morph (ctx, slot, newChildren) {
   }
 
   // Remove old children
-  remove(oldChildren.filter(Boolean))
+  remove(oldChildren.flatMap(getChilden).filter(Boolean))
 
   slot.children = newChildren
+}
+
+/**
+ * Pluck children from fragment
+ * @template Item
+ * @param {Item | Fragment} item Item to pluck from
+ * @returns {(Node | Item)[]}
+ */
+function getChilden (item) {
+  return item instanceof Fragment ? item.children : [item]
 }
 
 /**
@@ -118,10 +128,11 @@ export function morph (ctx, slot, newChildren) {
  * @param {Slot} slot Slot to search from
  * @returns {Node | void}
  */
-function findNext ({ index, siblings }) {
-  for (let next, i = index + 1, len = siblings.length; i < len; i++) {
-    next = siblings[i]
-    if (next instanceof Slot) next = findNext(next)
+function findNext (nodes, index = 0) {
+  for (let i = index, len = nodes.length; i < len; i++) {
+    let next = nodes[i]
+    if (next instanceof Slot) next = findNext(next.siblings, next.index + 1)
+    if (next instanceof Fragment) next = findNext(next.children)
     if (next) return next
   }
 }

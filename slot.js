@@ -1,29 +1,25 @@
-import { isArray } from './utils.js'
-
 /** @type {WeakMap<Node, Node[]>} */
 const childNodes = new WeakMap()
 
 /**
  * Create a template slot container
  * @class
- * @param {number} id The slot positional id
- * @param {Node} node Current node
+ * @param {Node} placeholder Placeholder node
  */
-export function Slot (id, node) {
-  const parent = node.parentNode
+export function Slot (placeholder) {
+  const parent = placeholder.parentNode
 
   /** @type {(Node | Slot)[]} */
   let siblings = childNodes.get(parent)
   if (!siblings) childNodes.set(parent, siblings = [...parent.childNodes])
 
-  const index = siblings.indexOf(node)
-  const children = isArray(node) ? node : [node]
-
+  const index = siblings.indexOf(placeholder)
   siblings.splice(index, 1, this)
 
-  this.id = id
   this.index = index
   this.parent = parent
   this.siblings = siblings
-  this.children = children
+
+  /** @type {(Node | Slot)[]} */
+  this.children = [placeholder]
 }

@@ -1,15 +1,13 @@
 import { assign, update, toNode } from './utils.js'
+import { stack, cache } from './context.js'
 import { Partial } from './partial.js'
 import { RENDER } from './emitter.js'
-import { stack } from './context.js'
 
 /** @typedef {import('./context.js').Context} Context */
 
 const ON_INIT = 0
-const ON_UNMOUNT = 0
 const ON_UPDATE = 1
 const ON_RENDER = 2
-const EXIT = Symbol('EXIT')
 
 /**
  * @callback Initialize
@@ -56,7 +54,6 @@ Component.prototype.constructor = Component
  * @returns {Node | null}
  */
 Component.prototype.render = function (ctx, onupdate) {
-  console.log('initiailize', this.key.name)
   let { fn, args } = this
   let rerender
 
@@ -121,17 +118,20 @@ Component.prototype.render = function (ctx, onupdate) {
   }
 
   function handleValue (value) {
-    console.log('rerender', value)
-    if (value == null) ctx.child = null
     if (value instanceof Partial) {
       if (value.key === ctx.child?.key) {
         update(ctx.child, value)
       } else {
         ctx.child = ctx.spawn(value.key)
-        onupdate(value.render(ctx.child, onupdate))
+        onupdate(value, function (value, onupdate) {
+          const node = value.render(ctx.child, onupdate)
+          if (node) cache.set(node, ctx)
+          return node
+        })
       }
     } else {
-      onupdate(toNode(value))
+      ctx.child = null
+      onupdate(value)
     }
   }
 }
@@ -156,129 +156,6 @@ function queue (generator) {
 function * wrap (current) {
   if (!isGenerator(current)) return current
   yield * current
-}
-
-/**
- * Unwrap Component to DOM Node
- * @param {Component} component The component to render
- * @param {Context} ctx Current context
- * @param {function(any): void} onupdate Update DOM
- * @param {function(Partial, Context): Node} render Render partial to Node
- * @returns {Node}
- */
-export function unwind (component, ctx, onupdate, render) {
-  const { fn, args } = component
-
-  ctx.args = args
-  ctx.node = null
-  ctx.child = null
-  ctx.update = null
-
-  ctx.emitter.on(RENDER, maybeUpdate)
-
-  ctx.editors.push(function editor (component) {
-    ctx.args = component.args
-    maybeUpdate()
-  })
-
-  try {
-    stack.unshift(ctx)
-    const value = walk(fn(ctx.state, ctx.emit), ctx, resolve)
-    if (value instanceof Promise) {
-      value.then(onupdate)
-      ctx.node = null
-    } else if (value instanceof Partial) {
-      ctx.node = render(value, ctx.child)
-    } else {
-      ctx.node = toNode(value)
-    }
-    return ctx.node
-  } finally {
-    stack.shift(ctx)
-  }
-
-  async function maybeUpdate () {
-    try {
-      let value = walk(ctx.update(...ctx.args), ctx, resolve, ON_UPDATE)
-      if (value instanceof Promise) {
-        ctx.node = null
-        onupdate(null)
-        value = await value
-      }
-      if (value instanceof Partial) {
-        value = render(value, ctx.child)
-      }
-      ctx.node = value
-      onupdate(value)
-    } catch (err) {
-      if (err !== EXIT) throw err
-    }
-  }
-
-  /** @type {Resolver} */
-  function resolve (value, ctx, id, next) {
-    let halt = false
-
-    try {
-      if (value instanceof Partial && value.key === ctx.child?.key) {
-        update(ctx.child, value)
-        throw EXIT
-      }
-
-      if (value instanceof Component) {
-        ctx.child = ctx.spawn(value.key)
-        return unwind(value, ctx.child, onupdate, render)
-      }
-
-      if (value instanceof Promise) {
-        halt = true
-        return value.then(next)
-      }
-
-      const isFunction = typeof value === 'function'
-
-      if (id === ON_UNMOUNT) {
-        ctx.update = isFunction ? value.bind(undefined) : () => value
-      }
-
-      if (isFunction) {
-        return walk(value(...ctx.args), ctx, resolve, id + 1)
-      }
-
-      if (value instanceof Partial) {
-        ctx.child = ctx.spawn(value.key)
-        return value
-      }
-    } finally {
-      if (next && !halt) {
-        if (id === ON_UNMOUNT) ctx.onunmount = () => next(value)
-        if (id === ON_UPDATE) window.requestAnimationFrame(() => next(value))
-        if (id === ON_RENDER) next(value)
-      }
-    }
-
-    return next ? next(value) : value
-  }
-}
-
-/**
- * Recursively walk generators yielding to supplied resolve function
- * @param {any} value Current value
- * @param {Context} ctx Current context
- * @param {Resolver} resolve Resolver function
- * @param {number} [id] Current depth
- * @returns {any}
- */
-function walk (value, ctx, resolve, id = ON_UNMOUNT) {
-  if (isGenerator(value)) {
-    let res = value.next()
-    return resolve(res.value, ctx, id, function next (resolved) {
-      if (res.done) return resolved
-      res = value.next(resolved)
-      return resolve(res.value, ctx, id, next)
-    })
-  }
-  return resolve(value, ctx, id)
 }
 
 /**

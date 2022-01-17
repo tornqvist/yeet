@@ -4,34 +4,38 @@ render(html`
   <div>
     <h1>Hello ${'world'}!</h1>
     ${Component(Counter)}
-    <ul>
-      ${['one', 'two', 'three'].map((num) => html`<li>${num}</li>`)}
-    </ul>
+    ${Component(List)}
   </div>
 `, document.getElementById('app'))
 
-function Wrapper () {
+function List (state, emit) {
+  const list = ['one', 'two', 'three']
+
   return function () {
-    return Component(Test)
+    return html`
+      <ul>${list.map((num) => Component(ListItem, { num }))}</ul>
+      <button onclick=${onclick}>Reverse</button>
+    `
+  }
+
+  function onclick () {
+    list.reverse()
+    emit('render')
   }
 }
 
-function Test (state, emit) {
-  return function * () {
-    yield new Promise((resolve) => setTimeout(resolve, 2000))
-    return html`<button onclick=${() => emit('render')}>Again</button>`
+function ListItem () {
+  let prev = null
+  return function * ({ num }) {
+    yield html`<li>${num} (${prev})</li>`
+    prev = num
   }
 }
 
 function Output () {
   let prev = 'none'
   return function * ({ count }) {
-    // if (count && count % 5 === 0) {
-    //   yield new Promise((resolve) => setTimeout(resolve, 2000))
-    // }
-    // if (count % 2 === 0) return null
-    if (count % 2 === 0) yield new Promise((resolve) => setTimeout(resolve, 2000))
-    yield html`<output>${count} (${prev})</output>`
+    yield html`Result: <output>${count} (${prev})</output>`
     prev = count
   }
 }

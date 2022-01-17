@@ -1,4 +1,5 @@
 import {
+  FRAGMENT_NODE,
   ELEMENT_NODE,
   COMMENT_NODE,
   PLACEHOLDER,
@@ -10,6 +11,8 @@ import {
 import { refs } from './ref.js'
 import { Slot } from './slot.js'
 import { morph } from './morph.js'
+import { cache } from './context.js'
+import { Fragment } from './fragment.js'
 import { EVENT_PREFIX, EventHandler } from './event-handler.js'
 
 /** @typedef {import('./context.js').Editor} Editor */
@@ -45,7 +48,7 @@ export function Partial (strings, values, isSVG = false) {
  * @param {Partial} partial Render partial to node
  * @param {Context} ctx Partial context
  * @param {CreateCallback} onupdate Callback when node is to be updated
- * @returns {Node}
+ * @returns {Node | Fragment}
  */
 Partial.prototype.render = function (ctx, onupdate) {
   const template = parse(this)
@@ -68,7 +71,7 @@ Partial.prototype.render = function (ctx, onupdate) {
 
   update(ctx, this)
 
-  return node
+  return node.nodeType === FRAGMENT_NODE ? new Fragment(this.key, node) : node
 }
 
 /**
@@ -110,14 +113,20 @@ function parse (partial) {
 
 /**
  * Create a node editor function
- * @param {Node} node The original placeholder node
+ * @param {Node} placeholder The placeholder node
  * @returns {Editor}
  */
-function createNodeEditor (node, ctx) {
-  const id = +node.nodeValue.match(PLACEHOLDER)[1]
-  const slot = new Slot(id, node)
+function createNodeEditor (placeholder, ctx) {
+  const id = +placeholder.nodeValue.match(PLACEHOLDER)[1]
+  const slot = new Slot(placeholder)
+
   return function nodeEditor (partial) {
-    morph(ctx, slot, partial.values[slot.id])
+    morph(slot, partial.values[id], function render (partial, onupdate) {
+      const child = ctx.spawn(partial.key)
+      const node = partial.render(child, onupdate)
+      if (node) cache.set(node, child)
+      return node
+    })
   }
 }
 
