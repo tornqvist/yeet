@@ -1,11 +1,9 @@
 import { html, render, Component } from '../../rewrite.js'
 
 render(html`
-  <div>
-    <h1>Hello ${'world'}!</h1>
-    ${Component(Counter)}
-    ${Component(List)}
-  </div>
+  <h1>Hello ${'world'}!</h1>
+  ${Component(Counter)}
+  ${Component(List)}
 `, document.getElementById('app'))
 
 function List (state, emit) {

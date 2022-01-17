@@ -1,5 +1,6 @@
 import { remove, replace, isArray } from './utils.js'
 import { Context, cache } from './context.js'
+import { Fragment } from './fragment.js'
 
 /**
  * Render partial as child to given node
@@ -12,8 +13,9 @@ export function render (partial, parent, state = {}) {
   const ctx = new Context(partial.key, state)
 
   let current
-  const node = partial.render(ctx, persist)
+  let node = partial.render(ctx, persist)
   cache.set(node, ctx)
+  if (node instanceof Fragment) node = [...node.children]
   persist(node)
   return node
 
