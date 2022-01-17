@@ -1,7 +1,9 @@
 import { assign, update, toNode } from './utils.js'
-import { stack, cache } from './context.js'
 import { Partial } from './partial.js'
 import { RENDER } from './emitter.js'
+import { stack } from './context.js'
+
+/** @typedef {import('./context.js').Context} Context */
 
 const ON_INIT = 0
 const ON_UNMOUNT = 0
@@ -19,7 +21,7 @@ const EXIT = Symbol('EXIT')
 /**
  * @callback Resolver
  * @param {any} value Current value
- * @param {import('./context.js').Context} ctx Current context
+ * @param {Context} ctx Current context
  * @param {number} id Current depth
  * @param {function(any): any} next Call to continue walking
  * @returns {any}
@@ -47,23 +49,23 @@ export function Component (fn, ...args) {
 Component.prototype = Object.create(Partial.prototype)
 Component.prototype.constructor = Component
 
-// Object.defineProperty(Component.prototype, 'current', {
-//   get () {
-//     return cache.get(this.child)
-//   }
-// })
+/**
+ * Render component to node
+ * @param {Context} ctx Current context
+ * @param {function(Node): void} onupdate Update DOM in place
+ * @returns {Node | null}
+ */
+Component.prototype.render = function (ctx, onupdate) {
+  console.log('initiailize', this.key.name)
+  let { fn, args } = this
+  let rerender
 
-export function initialize (component, ctx, render, replace) {
-  console.log('initiailize', component.key.name)
-  const { fn } = component
-
-  ctx.args = component.args
   ctx.editors.push(function (component) {
-    ctx.args = component.args
-    rerender(walk(wrap(ctx.update(...ctx.args)), ON_UPDATE))
+    args = component.args
+    handleValue(walk(wrap(rerender(...args)), ON_UPDATE))
   })
   ctx.emitter.on(RENDER, function () {
-    rerender(walk(wrap(ctx.update(...ctx.args)), ON_UPDATE))
+    handleValue(walk(wrap(rerender(...args)), ON_UPDATE))
   })
 
   try {
@@ -71,7 +73,7 @@ export function initialize (component, ctx, render, replace) {
     const value = walk(wrap(fn(ctx.state, ctx.emit)))
     if (value instanceof Partial) {
       ctx.child = ctx.spawn(value.key)
-      return render(value, ctx.child)
+      return value.render(ctx.child, onupdate)
     }
     return toNode(value)
   } finally {
@@ -92,18 +94,18 @@ export function initialize (component, ctx, render, replace) {
       if (value instanceof Promise) {
         value.then((value) => {
           return walk(gen, depth, value)
-        }).then(rerender)
+        }).then(handleValue)
         return null
       }
 
       const isPartial = value instanceof Partial
       const isFunction = typeof value === 'function'
       if (isFunction || isPartial) {
-        if (depth === ON_INIT) ctx.update = isFunction ? value : () => value
+        if (depth === ON_INIT) rerender = isFunction ? value : () => value
 
         try {
           if (isPartial) return value
-          return walk(wrap(value(...ctx.args)), depth + 1, value)
+          return walk(wrap(value(...args)), depth + 1, value)
         } finally {
           const deplete = queue(gen)
           if (depth === ON_INIT) ctx.onunmount = deplete
@@ -118,21 +120,18 @@ export function initialize (component, ctx, render, replace) {
     }
   }
 
-  function rerender (value) {
+  function handleValue (value) {
     console.log('rerender', value)
+    if (value == null) ctx.child = null
     if (value instanceof Partial) {
       if (value.key === ctx.child?.key) {
         update(ctx.child, value)
       } else {
         ctx.child = ctx.spawn(value.key)
-        const node = value instanceof Component
-          ? initialize(value, ctx.child, render, replace)
-          : render(value, ctx.child)
-        if (node) cache.set(node, ctx)
-        replace(node)
+        onupdate(value.render(ctx.child, onupdate))
       }
     } else {
-      replace(toNode(value))
+      onupdate(toNode(value))
     }
   }
 }
@@ -162,7 +161,7 @@ function * wrap (current) {
 /**
  * Unwrap Component to DOM Node
  * @param {Component} component The component to render
- * @param {import('./context.js').Context} ctx Current context
+ * @param {Context} ctx Current context
  * @param {function(any): void} onupdate Update DOM
  * @param {function(Partial, Context): Node} render Render partial to Node
  * @returns {Node}
@@ -265,7 +264,7 @@ export function unwind (component, ctx, onupdate, render) {
 /**
  * Recursively walk generators yielding to supplied resolve function
  * @param {any} value Current value
- * @param {import('./context.js').Context} ctx Current context
+ * @param {Context} ctx Current context
  * @param {Resolver} resolve Resolver function
  * @param {number} [id] Current depth
  * @returns {any}

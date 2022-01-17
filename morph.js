@@ -5,25 +5,22 @@ import {
   remove,
   update
 } from './utils.js'
+import { Slot } from './slot.js'
 import { cache } from './context.js'
 import { Partial } from './partial.js'
-import { Component } from './component.js'
+
+/** @typedef {import('./context.js').Context} Context */
 
 /**
  * Update or replace existing child node(s) with new value(s)
- * @param {Node[]} oldChildren Current child node(s)
- * @param {any} newChildren New child
- * @param {Node} parent Parent node
- * @param {Node|null} next Next node sibling
- * @param {function(partial): Node} render Render partial to Node
- * @returns {any}
+ * @param {Context} ctx Current context
+ * @param {Slot} slot Current slot
+ * @param {any[] | any} newChildren New children
  */
-export function morph (oldChildren, newChildren, parent, next, render) {
-  // Make sure not to mutate the original array
+export function morph (ctx, slot, newChildren) {
+  // Do not mutate any existing arrays
   newChildren = isArray(newChildren) ? [...newChildren] : [newChildren]
-
-  // Augument old children as an array for easier comparison
-  if (!isArray(oldChildren)) oldChildren = [oldChildren]
+  const oldChildren = [...slot.children]
 
   /** @type {Map<any, number[]>} */
   let map
@@ -41,13 +38,8 @@ export function morph (oldChildren, newChildren, parent, next, render) {
         const candidates = map?.get(key)
         if (candidates) candidates.splice(candidates.indexOf(i), 1)
         update(cached, newChild)
-        if (newChild instanceof Component) {
-          newChildren[i] = cached.node
-          if (cached.node) oldChildren[i] = null
-        } else {
-          oldChildren[i] = null
-          newChildren[i] = oldChild
-        }
+        oldChildren[i] = null
+        newChildren[i] = slot.children[i]
         continue
       }
 
@@ -57,11 +49,11 @@ export function morph (oldChildren, newChildren, parent, next, render) {
         for (let _i = 0, _len = oldChildren.length; _i < _len; _i++) {
           const _oldChild = oldChildren[_i]
           if (newChildren.includes(_oldChild)) continue
-          const ctx = cache.get(_oldChild)
-          if (ctx) {
-            const candidates = map.get(ctx.key)
+          const cached = cache.get(_oldChild)
+          if (cached) {
+            const candidates = map.get(cached.key)
             if (candidates) candidates.push(_i)
-            else map.set(ctx.key, [_i])
+            else map.set(cached.key, [_i])
           }
         }
       }
@@ -71,11 +63,20 @@ export function morph (oldChildren, newChildren, parent, next, render) {
       if (candidates?.length) {
         const index = candidates.pop()
         const cached = cache.get(oldChildren[index])
-        newChild = oldChild
-        oldChildren[index] = null
         update(cached, newChild)
+        oldChildren[index] = null
+        newChild = slot.children[i]
+        continue
       } else {
-        newChild = render(newChild)
+        // Otherwise, create a new child
+        const child = ctx.spawn(key)
+        newChild = newChild.render(child, function onupdate (value) {
+          const children = [...slot.children]
+          children[i] = value
+          if (value) cache.set(value, child)
+          morph(ctx, slot, children)
+        })
+        if (newChild) cache.set(newChild, child)
       }
     } else {
       // Reuse text nodes if possible
@@ -94,8 +95,9 @@ export function morph (oldChildren, newChildren, parent, next, render) {
     // Replace/remove/insert new child
     if (newChild != null) {
       if (!oldChild) {
+        const next = findNext(slot)
         if (next) next.before(newChild)
-        else parent.append(newChild)
+        else slot.parent.append(newChild)
       } else if (newChild !== oldChild) {
         oldChild.before(newChild)
       }
@@ -108,5 +110,18 @@ export function morph (oldChildren, newChildren, parent, next, render) {
   // Remove old children
   remove(oldChildren.filter(Boolean))
 
-  return newChildren
+  slot.children = newChildren
+}
+
+/**
+ * Find next non-null sibling to slot
+ * @param {Slot} slot Slot to search from
+ * @returns {Node | void}
+ */
+function findNext ({ index, siblings }) {
+  for (let next, i = index + 1, len = siblings.length; i < len; i++) {
+    next = siblings[i]
+    if (next instanceof Slot) next = findNext(next)
+    if (next) return next
+  }
 }

@@ -1,6 +1,7 @@
 import { WILDCARD, RENDER, Emitter } from './emitter.js'
 
-/** @typedef {function(import('./partial.js').Partial): void} Editor */
+/** @typedef {import('./partial.js').Partial} Partial */
+/** @typedef {function(Partial): void} Editor */
 
 /** @type {WeakMap<Node, Context>} */
 export const cache = new WeakMap()
