@@ -1,5 +1,7 @@
 import { stack, cache } from './context.js'
 
+/** @typedef {import('./partial.js').Partial} Partial */
+
 export const TEXT_NODE = 3
 export const ELEMENT_NODE = 1
 export const COMMENT_NODE = 8

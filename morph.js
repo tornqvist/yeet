@@ -13,10 +13,23 @@ import { Fragment } from './fragment.js'
 /** @typedef {import('./context.js').Context} Context */
 
 /**
+ * @callback render
+ * @param {Partial} partial Partial to render
+ * @param {onupdate} onupdate Callback when node is to be updated
+ * @returns {Node | Fragment}
+ */
+
+/**
+ * @callback onupdate
+ * @param {any} value Value to update with
+ * @param {render} render Callback to render partial
+ */
+
+/**
  * Update or replace existing child node(s) with new value(s)
- * @param {Context} ctx Current context
  * @param {Slot} slot Current slot
  * @param {any[] | any} newChildren New children
+ * @param {function(Partial, function(Node | any[] | any))} render Render function
  */
 export function morph (slot, newChildren, render) {
   // Do not mutate any existing arrays

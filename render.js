@@ -1,6 +1,10 @@
-import { remove, replace, isArray } from './utils.js'
 import { Context, cache } from './context.js'
 import { Fragment } from './fragment.js'
+import { morph } from './morph.js'
+import { Slot } from './slot.js'
+
+/** @typedef {import('./morph.js').onupdate} onupdate */
+/** @typedef {import('./partial.js').Partial} Partial */
 
 /**
  * Render partial as child to given node
@@ -11,26 +15,16 @@ import { Fragment } from './fragment.js'
  */
 export function render (partial, parent, state = {}) {
   const ctx = new Context(partial.key, state)
+  const slot = new Slot(null, parent)
 
-  let current
-  let node = partial.render(ctx, persist)
-  cache.set(node, ctx)
+  let node = partial.render(ctx, onupdate)
+  if (node) cache.set(node, ctx)
   if (node instanceof Fragment) node = [...node.children]
-  persist(node)
+  onupdate(node)
   return node
 
-  /**
-   * Persist node(s) to the DOM
-   * @param {Node[] | Node} children Node(s) to persist to the DOM
-   */
-  function persist (children) {
-    if (children) {
-      if (!isArray(children)) children = [children]
-      if (current) replace(current, children)
-      else parent.append(...children)
-    } else if (current) {
-      remove(current)
-    }
-    current = children
+  /** @type {onupdate} */
+  function onupdate (value, render) {
+    morph(slot, value, render)
   }
 }

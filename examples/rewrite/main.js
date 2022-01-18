@@ -1,10 +1,25 @@
-import { html, render, Component } from '../../rewrite.js'
+import { html, ref, render, Component } from '../../rewrite.js'
 
-render(html`
-  <h1>Hello ${'world'}!</h1>
-  ${Component(Counter)}
-  ${Component(List)}
-`, document.getElementById('app'))
+render(Component(function (state, emit) {
+  const input = ref()
+  let name = 'World'
+
+  return function * () {
+    yield new Promise((resolve) => setTimeout(resolve, 1000))
+    return html`
+      <h1>${html`Hello <strong>${name}</strong>!`}</h1>
+      <input ref=${input}>
+      <button onclick=${onclick}>Set name</button>
+      ${Component(Counter)}
+      ${Component(List)}
+    `
+  }
+
+  function onclick () {
+    name = input.current.value
+    emit('render')
+  }
+}), document.getElementById('app'))
 
 function List (state, emit) {
   const list = ['one', 'two', 'three']
@@ -33,6 +48,7 @@ function ListItem () {
 function Output () {
   let prev = 'none'
   return function * ({ count }) {
+    if (count % 2 === 0) yield new Promise((resolve) => setTimeout(resolve, 1000))
     yield html`Result: <output>${count} (${prev})</output>`
     prev = count
   }

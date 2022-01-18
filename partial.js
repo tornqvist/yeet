@@ -17,7 +17,7 @@ import { EVENT_PREFIX, EventHandler } from './event-handler.js'
 
 /** @typedef {import('./context.js').Editor} Editor */
 /** @typedef {import('./context.js').Context} Context */
-/** @typedef {function(Node): Context} CreateCallback */
+/** @typedef {import('./morph.js').onupdate} onupdate */
 
 const TAG = /<[a-z-]+ [^>]+$/i
 const COMMENT = /<!--(?!.*-->)/
@@ -30,7 +30,6 @@ const templates = new WeakMap()
 
 /**
  * Create a HTML partial object
- * @export
  * @class Partial
  * @param {Array<string>} strings Template strings
  * @param {Array<any>} values Template partials
@@ -45,9 +44,8 @@ export function Partial (strings, values, isSVG = false) {
 
 /**
  * Render partial to node
- * @param {Partial} partial Render partial to node
  * @param {Context} ctx Partial context
- * @param {CreateCallback} onupdate Callback when node is to be updated
+ * @param {onupdate} onupdate Callback when node is to be updated
  * @returns {Node | Fragment}
  */
 Partial.prototype.render = function (ctx, onupdate) {
@@ -76,7 +74,6 @@ Partial.prototype.render = function (ctx, onupdate) {
 
 /**
  * Parse partial
- * @export
  * @param {Partial} partial The partial to parse
  * @returns {Node}
  */

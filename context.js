@@ -11,7 +11,6 @@ export const stack = []
 
 /**
  * Create a partial context object
- * @export
  * @class Context
  * @param {any} key Partial key
  * @param {object} state Context state

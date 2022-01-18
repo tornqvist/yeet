@@ -4,56 +4,51 @@ import { Partial } from './partial.js'
 import { RENDER } from './emitter.js'
 
 /** @typedef {import('./context.js').Context} Context */
+/** @typedef {import('./morph.js').onupdate} onupdate */
+
+/**
+ * @callback Initialize
+ * @param {object} state Component state object
+ * @param {function(string, ...any): void} emit Emit events to component event emitter
+ * @returns {any}
+ */
+
+/**
+ * @typedef {object} Component Component instance
+ * @property {Initialize} fn Component initialization function
+ * @property {any} key Unique component identifier
+ * @property {any[]} args Render arguments
+ * @property {Context} [child] Currently rendered child node
+ */
 
 const ON_INIT = 0
 const ON_UPDATE = 1
 const ON_RENDER = 2
 
-/**
- * @callback Initialize
- * @param {object} state
- * @param {function(string, ...any): void} emit
- * @returns {any}
- */
-
-/**
- * @callback Resolver
- * @param {any} value Current value
- * @param {Context} ctx Current context
- * @param {number} id Current depth
- * @param {function(any): any} next Call to continue walking
- * @returns {any}
- */
+export { CreateComponent as Component }
 
 /**
  * Create component
- * @export
- * @class Component
- * @property {Initialize} fn Component initialization function
- * @property {any} key Unique component identifier
- * @property {any[]} args Render arguments
- * @property {Context} [child=null] Currently rendered child node
- * @property {function(): any} [update=null] Update function
  * @param {Initialize} fn Initialize function
  * @param {...any} [args] Render arguments
  * @returns {Component}
  */
-export function Component (fn, ...args) {
+function CreateComponent (fn, ...args) {
   const key = args[0]?.key || fn
   return assign(Object.setPrototypeOf(function Proxy () {
-    return Component(fn, ...(arguments.length ? arguments : args))
-  }, Component.prototype), { fn, key, args })
+    return CreateComponent(fn, ...(arguments.length ? arguments : args))
+  }, CreateComponent.prototype), { fn, key, args })
 }
-Component.prototype = Object.create(Partial.prototype)
-Component.prototype.constructor = Component
+CreateComponent.prototype = Object.create(Partial.prototype)
+CreateComponent.prototype.constructor = CreateComponent
 
 /**
  * Render component to node
  * @param {Context} ctx Current context
- * @param {function(Node): void} onupdate Update DOM in place
+ * @param {onupdate} onupdate Update DOM in place
  * @returns {Node | null}
  */
-Component.prototype.render = function (ctx, onupdate) {
+CreateComponent.prototype.render = function (ctx, onupdate) {
   let { fn, args } = this
   let rerender
 
@@ -123,7 +118,7 @@ Component.prototype.render = function (ctx, onupdate) {
         update(ctx.child, value)
       } else {
         ctx.child = ctx.spawn(value.key)
-        onupdate(value, function (value, onupdate) {
+        onupdate(value, function render (value, onupdate) {
           const node = value.render(ctx.child, onupdate)
           if (node) cache.set(node, ctx)
           return node
@@ -155,7 +150,7 @@ function queue (generator) {
  */
 function * wrap (current) {
   if (!isGenerator(current)) return current
-  yield * current
+  return yield * current
 }
 
 /**
