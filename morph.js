@@ -1,22 +1,24 @@
 import {
   TEXT_NODE,
+  getChildren,
+  findNext,
   isArray,
   toNode,
   remove,
-  update
+  update,
+  walk
 } from './utils.js'
-import { Slot } from './slot.js'
 import { cache } from './context.js'
 import { Partial } from './partial.js'
-import { Fragment } from './fragment.js'
 
 /** @typedef {import('./context.js').Context} Context */
+/** @typedef {import('./slot.js').Slot} Slot */
 
 /**
  * @callback render
  * @param {Partial} partial Partial to render
  * @param {onupdate} onupdate Callback when node is to be updated
- * @returns {Node | Fragment}
+ * @returns {IterableIterator<Node | Fragment>}
  */
 
 /**
@@ -83,11 +85,11 @@ export function morph (slot, newChildren, render) {
         continue
       } else {
         // Otherwise, create a new child
-        newChild = render(newChild, function onupdate (value, render) {
+        newChild = walk(render(newChild, function onupdate (value, render) {
           const children = [...slot.children]
           children[i] = value
           morph(slot, children, render)
-        })
+        }))
       }
     } else {
       // Reuse text nodes if possible
@@ -105,7 +107,7 @@ export function morph (slot, newChildren, render) {
 
     // Replace/remove/insert new child
     if (newChild != null) {
-      const args = getChilden(newChild)
+      const args = getChildren(newChild)
       if (!oldChild) {
         const next = findNext(slot.siblings, slot.index + 1)
         if (next) next.before(...args)
@@ -121,31 +123,7 @@ export function morph (slot, newChildren, render) {
   }
 
   // Remove old children
-  remove(oldChildren.flatMap(getChilden).filter(Boolean))
+  remove(oldChildren.flatMap(getChildren).filter(Boolean))
 
   slot.children = newChildren
-}
-
-/**
- * Pluck children from fragment
- * @template Item
- * @param {Item | Fragment} item Item to pluck from
- * @returns {(Node | Item)[]}
- */
-function getChilden (item) {
-  return item instanceof Fragment ? item.children : [item]
-}
-
-/**
- * Find next non-null sibling to slot
- * @param {Slot} slot Slot to search from
- * @returns {Node | void}
- */
-function findNext (nodes, index = 0) {
-  for (let i = index, len = nodes.length; i < len; i++) {
-    let next = nodes[i]
-    if (next instanceof Slot) next = findNext(next.siblings, next.index + 1)
-    if (next instanceof Fragment) next = findNext(next.children)
-    if (next) return next
-  }
 }

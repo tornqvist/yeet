@@ -1,6 +1,20 @@
+import { EVENT_PREFIX, EventHandler } from './event-handler.js'
 import { stack, cache } from './context.js'
+import { Fragment } from './fragment.js'
+import { Slot } from './slot.js'
+import { refs } from './ref.js'
 
 /** @typedef {import('./partial.js').Partial} Partial */
+/** @typedef {import('./context.js').Editor} Editor */
+
+const TAG = /<[a-z-]+ [^>]+$/i
+const COMMENT = /<!--(?!.*-->)/
+const LEADING_WHITESPACE = /^\s+(<)/
+const TRAILING_WHITESPACE = /(>)\s+$/
+const ATTRIBUTE = /<[a-z-]+[^>]*?\s+(([^\t\n\f "'>/=]+)=("|')?)?$/i
+
+/** @type {WeakMap<Array<string>, Node>} */
+const templates = new WeakMap()
 
 export const TEXT_NODE = 3
 export const ELEMENT_NODE = 1
@@ -81,4 +95,163 @@ function onunmount (node) {
     if (ctx?.onunmount) ctx.onunmount()
     current = walker.nextNode()
   }
+}
+
+/**
+ * Determine whether node is a placeholder node
+ * @param {Node} node The node to test
+ * @returns {Boolean}
+ */
+export function isPlaceholder (node) {
+  const { nodeValue, nodeType } = node
+  return nodeType === COMMENT_NODE && PLACEHOLDER.test(nodeValue)
+}
+
+/**
+ * Get placeholder id
+ * @param {Node} node The placeholder node
+ * @returns {number}
+ */
+export function getPlaceholderId (node) {
+  return +node.nodeValue.match(PLACEHOLDER)[1]
+}
+
+/**
+ * Parse partial
+ * @param {Partial} partial The partial to parse
+ * @returns {Node}
+ */
+export function parse (partial) {
+  const { strings, isSVG } = partial
+  let template = templates.get(strings)
+  if (template) return template
+
+  const { length } = strings
+  let html = strings.reduce(function compile (html, string, index) {
+    html += string
+    if (index === length - 1) return html
+    if (ATTRIBUTE.test(html) || COMMENT.test(html)) html += `yeet-${index}`
+    else if (TAG.test(html)) html += `data-yeet-${index}`
+    else html += `<!--yeet-${index}-->`
+    return html
+  }, '').replace(LEADING_WHITESPACE, '$1').replace(TRAILING_WHITESPACE, '$1')
+
+  const wrap = isSVG && !html.startsWith('<svg')
+  if (wrap) html = `<svg>${html}</svg>`
+
+  template = document.createElement('template')
+  template.innerHTML = html
+  template = template.content
+  if (template.childNodes.length === 1 && !isPlaceholder(template.firstChild)) {
+    template = template.firstChild
+    if (wrap) template = template.firstChild
+  }
+
+  templates.set(strings, template)
+
+  return template
+}
+
+/**
+ * Create an attribute editor function
+ * @param {Node} node Target node
+ * @param {object[]} attributes Attributes to edit
+ * @param {string} attributes[].name Attribute name
+ * @param {string} attributes[].value Attribute value
+ * @returns {Editor}
+ */
+export function createAttributeEditor (node, attributes) {
+  return function attributeEditor (partial) {
+    const attrs = attributes.reduce(function (attrs, { name, value }) {
+      name = PLACEHOLDER.test(name)
+        ? resolvePlaceholders(name, partial.values)
+        : name
+      value = PLACEHOLDER.test(value)
+        ? resolvePlaceholders(value, partial.values)
+        : value
+      if (typeof name === 'object') {
+        if (isArray(name)) {
+          for (const value of name.flat()) {
+            if (typeof value === 'object') assign(attrs, value)
+            else attrs[value] = ''
+          }
+        } else {
+          assign(attrs, name)
+        }
+      } else if (EVENT_PREFIX.test(name)) {
+        const events = EventHandler.get(node)
+        events.set(name, value)
+      } else if (name === 'ref') {
+        if (typeof value === 'function') value(node)
+        else refs.set(value, node)
+      } else if (value != null) {
+        attrs[name] = value
+      }
+      return attrs
+    }, {})
+
+    for (let [name, value] of entries(attrs)) {
+      if (isArray(value)) value = value.join(' ')
+      if (name in node) {
+        node[name] = value
+      } else if (node.getAttribute(name) !== value) {
+        node.setAttribute(name, value)
+      }
+    }
+  }
+}
+
+/**
+ * Resolve values from placeholder string
+ * @param {string} str String from which to match values
+ * @param {any[]} values List of values to replace placeholders with
+ * @returns {any}
+ */
+export function resolvePlaceholders (str, values) {
+  const [match, id] = str.match(PLACEHOLDER)
+  if (match === str) return values[+id]
+  const pattern = new RegExp(PLACEHOLDER, 'g')
+  return str.replace(pattern, (_, id) => values[+id])
+}
+
+/**
+ * Find next non-null sibling to slot
+ * @param {Node[]} nodes List of nodes to search
+ * @param {number} [index=0] Index of node to start search from
+ * @returns {Node | void}
+ */
+export function findNext (nodes, index = 0) {
+  for (let i = index, len = nodes.length; i < len; i++) {
+    let next = nodes[i]
+    if (next instanceof Slot) next = findNext(next.siblings, next.index + 1)
+    if (next instanceof Fragment) next = findNext(next.children)
+    if (next) return next
+  }
+}
+
+/**
+ * Walk a generator looking for value which passes test
+ * @param {IterableIterator<any>} gen A generator
+ * @param {function(any): boolean} [test] Callback to test each value
+ * @param {any} [prev] Initial value to pass to generator
+ * @returns {any}
+ */
+export function walk (gen, test, prev) {
+  while (true) {
+    const { done, value } = gen.next(prev)
+    if (done || test?.(value)) return value
+    prev = value
+  }
+}
+
+/**
+ * Pluck children from fragment
+ * @template Item
+ * @param {Item | Fragment} item Item to pluck from
+ * @returns {(Node | Item)[]}
+ */
+export function getChildren (item) {
+  if (item instanceof Fragment) return item.children
+  if (item instanceof Slot) return item.children.flatMap(getChildren)
+  return [item]
 }

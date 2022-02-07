@@ -1,8 +1,10 @@
 /**
  * Create a fragment container
- * @param {DocumentFragment} fragment Fragment node
+ * @class
+ * @param {any} key The key of the originating partial
+ * @param {Node[]} children Fragment child nodes
  */
-export function Fragment (key, fragment) {
+export function Fragment (key, children) {
   this.key = key
-  this.children = [...fragment.childNodes]
+  this.children = children
 }

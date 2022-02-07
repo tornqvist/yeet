@@ -1,11 +1,13 @@
 import { html, ref, render, Component } from '../../rewrite.js'
+import { mount } from '../../mount'
 
-render(Component(function (state, emit) {
+mount(Component(App), document.body)
+
+function App (state, emit) {
   const input = ref()
   let name = 'World'
 
-  return function * () {
-    yield new Promise((resolve) => setTimeout(resolve, 1000))
+  return function () {
     return html`
       <h1>${html`Hello <strong>${name}</strong>!`}</h1>
       <input ref=${input}>
@@ -19,7 +21,7 @@ render(Component(function (state, emit) {
     name = input.current.value
     emit('render')
   }
-}), document.getElementById('app'))
+}
 
 function List (state, emit) {
   const list = ['one', 'two', 'three']

@@ -1,4 +1,4 @@
-import { assign, update, toNode } from './utils.js'
+import { assign, update, toNode, isArray } from './utils.js'
 import { stack, cache } from './context.js'
 import { Partial } from './partial.js'
 import { RENDER } from './emitter.js'
@@ -34,7 +34,7 @@ export { CreateComponent as Component }
  * @returns {Component}
  */
 function CreateComponent (fn, ...args) {
-  const key = args[0]?.key || fn
+  const key = args[0]?.key ?? fn
   return assign(Object.setPrototypeOf(function Proxy () {
     return CreateComponent(fn, ...(arguments.length ? arguments : args))
   }, CreateComponent.prototype), { fn, key, args })
@@ -46,13 +46,13 @@ CreateComponent.prototype.constructor = CreateComponent
  * Render component to node
  * @param {Context} ctx Current context
  * @param {onupdate} onupdate Update DOM in place
- * @returns {Node | null}
+ * @returns {IterableIterator<Node | null>}
  */
-CreateComponent.prototype.render = function (ctx, onupdate) {
+CreateComponent.prototype.render = function * (ctx, onupdate) {
   let { fn, args } = this
   let rerender
 
-  ctx.editors.push(function (component) {
+  ctx.editors.push(function editor (component) {
     args = component.args
     handleValue(walk(wrap(rerender(...args)), ON_UPDATE))
   })
@@ -65,7 +65,8 @@ CreateComponent.prototype.render = function (ctx, onupdate) {
     const value = walk(wrap(fn(ctx.state, ctx.emit)))
     if (value instanceof Partial) {
       ctx.child = ctx.spawn(value.key)
-      return value.render(ctx.child, onupdate)
+      yield value
+      return yield * value.render(ctx.child, onupdate)
     }
     return toNode(value)
   } finally {
@@ -118,8 +119,8 @@ CreateComponent.prototype.render = function (ctx, onupdate) {
         update(ctx.child, value)
       } else {
         ctx.child = ctx.spawn(value.key)
-        onupdate(value, function render (value, onupdate) {
-          const node = value.render(ctx.child, onupdate)
+        onupdate(value, function * render (value, onupdate) {
+          const node = yield * value.render(ctx.child, onupdate)
           if (node) cache.set(node, ctx)
           return node
         })

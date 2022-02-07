@@ -54,4 +54,5 @@ export function use (fn) {
 
 export { Component } from './component.js'
 export { render } from './render.js'
+export { Partial }
 // export { mount } from './mount.js'

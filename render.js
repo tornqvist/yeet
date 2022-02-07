@@ -1,5 +1,4 @@
 import { Context, cache } from './context.js'
-import { Fragment } from './fragment.js'
 import { morph } from './morph.js'
 import { Slot } from './slot.js'
 
@@ -15,16 +14,11 @@ import { Slot } from './slot.js'
  */
 export function render (partial, parent, state = {}) {
   const ctx = new Context(partial.key, state)
-  const slot = new Slot(null, parent)
+  const slot = new Slot([...parent.childNodes], parent)
 
-  let node = partial.render(ctx, onupdate)
-  if (node) cache.set(node, ctx)
-  if (node instanceof Fragment) node = [...node.children]
-  onupdate(node)
-  return node
-
-  /** @type {onupdate} */
-  function onupdate (value, render) {
-    morph(slot, value, render)
-  }
+  morph(slot, partial, function * render (partial, onupdate) {
+    const node = yield * partial.render(ctx, onupdate)
+    if (node) cache.set(node, ctx)
+    return node
+  })
 }

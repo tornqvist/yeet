@@ -7,20 +7,28 @@
   "types": "dist/index.d.ts",
   "type": "module",
   "exports": {
-    "import": "./index.js",
-    "node": "./server.js",
-    "default": "./index.js"
+    ".": {
+      "import": "./index.js",
+      "node": "./server.js",
+      "default": "./index.js"
+    },
+    "./mount": {
+      "import": "./mount.js",
+      "node": "./server.js",
+      "default": "./mount.js"
+    }
   },
   "scripts": {
     "test": "uvu test/server && umu test/browser && standard",
     "build": "npm run build:server && npm run build:browser && echo '{\"type\":\"commonjs\"}' > dist/package.json",
     "build:server": "rollup --no-esModule --format=cjs --file=dist/server.cjs.js server.js",
     "build:browser": "rollup --no-esModule --format=cjs --file=dist/browser.cjs.js index.js",
-    "compile": "npx -p typescript tsc *.js --declaration --allowJs --emitDeclarationOnly --outFile dist/index.d.ts",
+    "compile": "tsc *.js --declaration --allowJs --emitDeclarationOnly --outFile dist/index.d.ts",
     "prepublishOnly": "npm run build && npm run compile"
   },
   "files": [
     "index.js",
+    "mount.js",
     "server.js",
     "dist"
   ],
@@ -28,6 +36,7 @@
   "license": "MIT",
   "devDependencies": {
     "standard": "^16.0.4",
+    "typescript": "^4.5.4",
     "umu": "^0.0.2",
     "uvu": "^0.5.2"
   }
