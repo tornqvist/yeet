@@ -230,21 +230,6 @@ export function findNext (nodes, index = 0) {
 }
 
 /**
- * Walk a generator looking for value which passes test
- * @param {IterableIterator<any>} gen A generator
- * @param {function(any): boolean} [test] Callback to test each value
- * @param {any} [prev] Initial value to pass to generator
- * @returns {any}
- */
-export function walk (gen, test, prev) {
-  while (true) {
-    const { done, value } = gen.next(prev)
-    if (done || test?.(value)) return value
-    prev = value
-  }
-}
-
-/**
  * Pluck children from fragment
  * @template Item
  * @param {Item | Fragment} item Item to pluck from

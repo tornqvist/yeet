@@ -1,7 +1,7 @@
-import { assign, update, toNode, isArray } from './utils.js'
-import { stack, cache } from './context.js'
-import { Partial } from './partial.js'
+import { assign } from './utils.js'
+import { stack } from './context.js'
 import { RENDER } from './emitter.js'
+import { Partial } from './partial.js'
 
 /** @typedef {import('./context.js').Context} Context */
 /** @typedef {import('./morph.js').onupdate} onupdate */
@@ -18,7 +18,6 @@ import { RENDER } from './emitter.js'
  * @property {Initialize} fn Component initialization function
  * @property {any} key Unique component identifier
  * @property {any[]} args Render arguments
- * @property {Context} [child] Currently rendered child node
  */
 
 const ON_INIT = 0
@@ -48,27 +47,21 @@ CreateComponent.prototype.constructor = CreateComponent
  * @param {onupdate} onupdate Update DOM in place
  * @returns {IterableIterator<Node | null>}
  */
-CreateComponent.prototype.render = function * (ctx, onupdate) {
+CreateComponent.prototype.render = function (ctx, onupdate) {
   let { fn, args } = this
   let rerender
 
   ctx.editors.push(function editor (component) {
     args = component.args
-    handleValue(walk(wrap(rerender(...args)), ON_UPDATE))
+    onupdate(walk(wrap(rerender(...args)), ON_UPDATE))
   })
   ctx.emitter.on(RENDER, function () {
-    handleValue(walk(wrap(rerender(...args)), ON_UPDATE))
+    onupdate(walk(wrap(rerender(...args)), ON_UPDATE))
   })
 
   try {
     stack.unshift(ctx)
-    const value = walk(wrap(fn(ctx.state, ctx.emit)))
-    if (value instanceof Partial) {
-      ctx.child = ctx.spawn(value.key)
-      yield value
-      return yield * value.render(ctx.child, onupdate)
-    }
-    return toNode(value)
+    return walk(wrap(fn(ctx.state, ctx.emit)))
   } finally {
     stack.shift()
   }
@@ -85,9 +78,7 @@ CreateComponent.prototype.render = function * (ctx, onupdate) {
       const { done, value } = gen.next(prev)
 
       if (value instanceof Promise) {
-        value.then((value) => {
-          return walk(gen, depth, value)
-        }).then(handleValue)
+        value.then((value) => walk(gen, depth, value)).then(onupdate)
         return null
       }
 
@@ -110,24 +101,6 @@ CreateComponent.prototype.render = function * (ctx, onupdate) {
       if (done) return value
 
       prev = value
-    }
-  }
-
-  function handleValue (value) {
-    if (value instanceof Partial) {
-      if (value.key === ctx.child?.key) {
-        update(ctx.child, value)
-      } else {
-        ctx.child = ctx.spawn(value.key)
-        onupdate(value, function * render (value, onupdate) {
-          const node = yield * value.render(ctx.child, onupdate)
-          if (node) cache.set(node, ctx)
-          return node
-        })
-      }
-    } else {
-      ctx.child = null
-      onupdate(value)
     }
   }
 }

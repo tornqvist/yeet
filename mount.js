@@ -11,9 +11,9 @@ import {
   findNext,
   isArray,
   toNode,
+  update,
   remove,
-  parse,
-  walk
+  parse
 } from './utils.js'
 import { EVENT_PREFIX, EventHandler } from './event-handler.js'
 import { Context, cache } from './context.js'
@@ -48,42 +48,66 @@ export function mount (partial, node, state = {}) {
  * @param {boolean} [isRoot=false]
  */
 function mountSlot (slot, newChildren, ctx, isRoot = false) {
+  function unwind (value, index, ctx) {
+    if (!(value instanceof Partial)) return [ctx, value]
+    if (!isRoot) ctx = ctx.spawn(value.key)
+
+    let current = ctx
+    while (value instanceof Component) {
+      const parent = current
+      let child
+
+      value = value.render(current, function handleUpdate (value) {
+        const isPartial = value instanceof Partial
+        if (isPartial && value.key === child?.key) {
+          update(child, value)
+        } else {
+          child = isPartial ? parent.spawn(value.key) : null
+          const children = [...slot.children]
+          children[index] = value
+          morph(slot, children, ctx, function render (partial, ctx, onupdate) {
+            const [_current, _partial] = unwind(partial, index, current)
+            const node = _partial.render(_current, render)
+            cache.set(node, ctx)
+            return node
+          })
+        }
+      })
+
+      if (value instanceof Partial) {
+        current = child = parent.spawn(value.key)
+      }
+    }
+
+    return [current, value]
+  }
+
   newChildren = isArray(newChildren) ? [...newChildren] : [newChildren]
 
   for (let i = 0, len = newChildren.length; i < len; i++) {
-    let newChild = newChildren[i]
-
-    let generator
-    if (newChild instanceof Component) {
-      ctx = ctx.spawn(newChild.key)
-      generator = newChild.render(ctx, function onupdate (value, render) {
-        morph(slot, [value], render)
-      })
-      newChild = walk(generator, isPartial)
-      ctx = newChild.child || ctx
-    }
+    let [current, newChild] = unwind(newChildren[i], i, ctx)
 
     if (newChild instanceof Partial) {
       const template = parse(newChild)
       const { key, values } = newChild
 
       if (template.nodeType === FRAGMENT_NODE) {
-        generator?.return()
         const children = mountChildren(
           [...template.childNodes],
           slot.children,
           slot.parent,
-          values
+          values,
+          current
         )
         newChildren[i] = new Fragment(key, children)
         slot.children.splice(i, children.length, newChildren[i])
       } else if (slot.children.length) {
-        generator?.return()
         const [node] = mountChildren(
           [template],
           slot.children,
           slot.parent,
-          values
+          values,
+          current
         )
         if (slot.children.includes(node)) {
           slot.children.splice(slot.children.indexOf(node), 1)
@@ -91,18 +115,15 @@ function mountSlot (slot, newChildren, ctx, isRoot = false) {
         newChildren[i] = node
         cache.set(node, ctx)
       } else {
-        newChild = generator ? walk(generator) : newChild
-        morph(slot, newChild, function * render (partial, onupdate) {
-          const _ctx = ctx.spawn(newChild.key)
-          const node = yield * partial.render(_ctx, onupdate)
-          if (node) cache.set(node, _ctx)
+        morph(slot, newChild, current, function render (partial, onupdate) {
+          const [_current, _partial] = unwind(partial, i, current)
+          const node = _partial.render(_current, render)
+          cache.set(node, ctx)
           return node
         })
         newChildren[i] = newChild
       }
     } else {
-      generator?.return()
-
       if (newChild != null) {
         const child = slot.children.pop()
         if (child?.nodeType === TEXT_NODE && !isArray(newChild)) {
@@ -131,7 +152,7 @@ function mountSlot (slot, newChildren, ctx, isRoot = false) {
    * @param {any[]} values Current partial values
    * @returns {(Node | Slot)[]}
    */
-  function mountChildren (templateNodes, children, parent, values) {
+  function mountChildren (templateNodes, children, parent, values, ctx) {
     return templateNodes.map(function mountChild (templateNode) {
       for (let child = children.shift(); child; child = children.shift()) {
         if (isPlaceholder(templateNode)) {
@@ -154,7 +175,8 @@ function mountSlot (slot, newChildren, ctx, isRoot = false) {
               [...templateNode.childNodes],
               [...child.childNodes],
               child,
-              values
+              values,
+              ctx
             )
           } else if (child.nodeType === TEXT_NODE) {
             if (child.nodeValue !== templateNode.nodeValue) {
@@ -175,7 +197,7 @@ function mountSlot (slot, newChildren, ctx, isRoot = false) {
         return slot
       } else {
         const newChild = templateNode.cloneNode(true)
-        mountChildren([...newChild.childNodes], [], newChild, values)
+        mountChildren([...newChild.childNodes], [], newChild, values, ctx)
         parent.append(newChild)
         return newChild
       }
@@ -232,8 +254,4 @@ function createNodeEditor (id, slot, ctx) {
       return node
     })
   }
-}
-
-function isPartial (value) {
-  return value instanceof Partial && !(value instanceof Component)
 }

@@ -5,20 +5,21 @@ import {
   isArray,
   toNode,
   remove,
-  update,
-  walk
+  update
 } from './utils.js'
 import { cache } from './context.js'
 import { Partial } from './partial.js'
 
+/** @typedef {import('./component.js').Component} Component */
 /** @typedef {import('./context.js').Context} Context */
 /** @typedef {import('./slot.js').Slot} Slot */
 
 /**
  * @callback render
  * @param {Partial} partial Partial to render
+ * @param {Context} ctx Current context
  * @param {onupdate} onupdate Callback when node is to be updated
- * @returns {IterableIterator<Node | Fragment>}
+ * @returns {Node | Fragment}
  */
 
 /**
@@ -31,9 +32,10 @@ import { Partial } from './partial.js'
  * Update or replace existing child node(s) with new value(s)
  * @param {Slot} slot Current slot
  * @param {any[] | any} newChildren New children
- * @param {function(Partial, function(Node | any[] | any))} render Render function
+ * @param {Context} ctx Current context
+ * @param {render} render Render function
  */
-export function morph (slot, newChildren, render) {
+export function morph (slot, newChildren, ctx, render) {
   // Do not mutate any existing arrays
   newChildren = isArray(newChildren) ? [...newChildren] : [newChildren]
   const oldChildren = [...slot.children]
@@ -85,11 +87,11 @@ export function morph (slot, newChildren, render) {
         continue
       } else {
         // Otherwise, create a new child
-        newChild = walk(render(newChild, function onupdate (value, render) {
+        newChild = render(newChild, ctx, function onupdate (value, render) {
           const children = [...slot.children]
           children[i] = value
-          morph(slot, children, render)
-        }))
+          morph(slot, children, ctx, render)
+        })
       }
     } else {
       // Reuse text nodes if possible

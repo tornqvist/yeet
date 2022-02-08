@@ -10,11 +10,11 @@ import {
 } from './utils.js'
 import { Slot } from './slot.js'
 import { morph } from './morph.js'
-import { cache } from './context.js'
 import { Fragment } from './fragment.js'
 
 /** @typedef {import('./context.js').Editor} Editor */
 /** @typedef {import('./morph.js').onupdate} onupdate */
+/** @typedef {import('./morph.js').render} render */
 
 /**
  * Create a HTML partial object
@@ -33,10 +33,10 @@ export function Partial (strings, values, isSVG = false) {
 /**
  * Render partial to node
  * @param {Context} ctx Partial context
- * @param {onupdate} onupdate Callback when node is to be updated
- * @returns {IterableIterator<Node | Fragment>}
+ * @param {render} render Callback for rendering nested partial
+ * @returns {Node | Fragment}
  */
-Partial.prototype.render = function * (ctx, onupdate) {
+Partial.prototype.render = function (ctx, render) {
   const template = parse(this)
   const node = template.cloneNode(true)
 
@@ -48,7 +48,7 @@ Partial.prototype.render = function * (ctx, onupdate) {
   const walker = document.createTreeWalker(node, 1 | 128, null, false)
   for (let current = walker.nextNode(); current; current = walker.nextNode()) {
     if (isPlaceholder(current)) {
-      ctx.editors.push(createNodeEditor(current, ctx))
+      ctx.editors.push(createNodeEditor(current, ctx, render))
     } else if (current.nodeType === ELEMENT_NODE) {
       const editor = getAttributeEditor(current)
       if (editor) ctx.editors.push(editor)
@@ -67,17 +67,12 @@ Partial.prototype.render = function * (ctx, onupdate) {
  * @param {Node} placeholder The placeholder node
  * @returns {Editor}
  */
-function createNodeEditor (placeholder, ctx) {
+function createNodeEditor (placeholder, ctx, render) {
   const id = getPlaceholderId(placeholder)
   const slot = new Slot([placeholder], placeholder.parentNode)
 
   return function nodeEditor (partial) {
-    morph(slot, partial.values[id], function * render (partial, onupdate) {
-      const child = ctx.spawn(partial.key)
-      const node = yield * partial.render(child, onupdate)
-      if (node) cache.set(node, child)
-      return node
-    })
+    morph(slot, partial.values[id], ctx, render)
   }
 }
 
