@@ -1,5 +1,5 @@
 /** @type {WeakMap<Node, Node[]>} */
-const childNodes = new WeakMap()
+export const slots = new WeakMap()
 
 /**
  * Create a template slot container
@@ -9,10 +9,14 @@ const childNodes = new WeakMap()
  */
 export function Slot (children, parent) {
   /** @type {(Node | Slot)[]} */
-  let siblings = childNodes.get(parent)
-  if (!siblings) childNodes.set(parent, siblings = [...parent.childNodes])
+  let siblings = slots.get(parent)
+  if (!siblings) slots.set(parent, siblings = [...parent.childNodes])
 
-  const index = Math.max(0, siblings.indexOf(children[0]))
+  const index = children.length
+    ? siblings.includes(children[0])
+        ? siblings.indexOf(children[0])
+        : siblings.length
+    : siblings.length
   siblings[index] = this
 
   this.index = index

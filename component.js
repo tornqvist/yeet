@@ -1,7 +1,7 @@
-import { assign } from './utils.js'
-import { stack } from './context.js'
 import { RENDER } from './emitter.js'
 import { Partial } from './partial.js'
+import { stack, cache } from './context.js'
+import { assign, update, toNode } from './utils.js'
 
 /** @typedef {import('./context.js').Context} Context */
 /** @typedef {import('./morph.js').onupdate} onupdate */
@@ -42,28 +42,78 @@ CreateComponent.prototype = Object.create(Partial.prototype)
 CreateComponent.prototype.constructor = CreateComponent
 
 /**
- * Render component to node
+ * Render component
  * @param {Context} ctx Current context
  * @param {onupdate} onupdate Update DOM in place
- * @returns {IterableIterator<Node | null>}
+ * @returns {Node | Fragment| null}
  */
 CreateComponent.prototype.render = function (ctx, onupdate) {
-  let { fn, args } = this
-  let rerender
+  const { child, value } = this.initialize(ctx, onupdate)
+  const node = value instanceof Partial
+    ? value.render(child, onupdate)
+    : toNode(value)
+  if (node) cache.set(node, ctx)
+  return node
+}
 
-  ctx.editors.push(function editor (component) {
+/**
+ * Initialize component
+ * @param {Context} ctx Current context
+ * @param {onupdate} onupdate Update DOM in place
+ * @returns {{ child?: Context, value: any }}
+ */
+CreateComponent.prototype.initialize = function (ctx, onupdate) {
+  let { fn, args } = this
+  let rerender, child
+
+  console.log('initialize', fn.name)
+
+  ctx.editors.push(function componentEditor (component) {
     args = component.args
-    onupdate(walk(wrap(rerender(...args)), ON_UPDATE))
+    handleUpdate()
   })
-  ctx.emitter.on(RENDER, function () {
-    onupdate(walk(wrap(rerender(...args)), ON_UPDATE))
-  })
+  ctx.emitter.on(RENDER, handleUpdate)
 
   try {
     stack.unshift(ctx)
-    return walk(wrap(fn(ctx.state, ctx.emit)))
+    const value = walk(wrap(fn(ctx.state, ctx.emit)))
+    if (value instanceof Partial) {
+      child = ctx.spawn(value.key)
+    }
+    if (value instanceof CreateComponent) {
+      return value.initialize(child, onupdate)
+    }
+    return { child, value }
   } finally {
     stack.shift()
+  }
+
+  function handleUpdate () {
+    try {
+      stack.unshift(ctx)
+      const value = walk(wrap(rerender(...args)), ON_UPDATE)
+      const isPartial = value instanceof Partial
+      if (isPartial && value.key === child?.key) {
+        update(child, value)
+      } else if (value instanceof CreateComponent) {
+        child = ctx.spawn(value.key)
+        const inner = value.initialize(child, onupdate)
+        onupdate(inner.value, inner.child, afterupdate)
+      } else {
+        child = isPartial ? ctx.spawn(value.key) : null
+        onupdate(value, child, afterupdate)
+      }
+    } finally {
+      stack.shift()
+    }
+  }
+
+  /**
+   * Cache the component context with the rendered node
+   * @param {any} node The updated node
+   */
+  function afterupdate (node) {
+    if (node) cache.set(node, ctx)
   }
 
   /**
@@ -78,7 +128,14 @@ CreateComponent.prototype.render = function (ctx, onupdate) {
       const { done, value } = gen.next(prev)
 
       if (value instanceof Promise) {
-        value.then((value) => walk(gen, depth, value)).then(onupdate)
+        value
+          .then((value) => walk(gen, depth, value))
+          .then(function (value) {
+            if (value instanceof Partial) {
+              child = ctx.spawn(value.key)
+            }
+            onupdate(value, child, afterupdate)
+          })
         return null
       }
 

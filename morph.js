@@ -25,14 +25,15 @@ import { Partial } from './partial.js'
 /**
  * @callback onupdate
  * @param {any} value Value to update with
- * @param {render} render Callback to render partial
+ * @param {Context} ctx Current context
+ * @param {function(any): void} afterupdate Callback when node has been updated
+ * @returns {Node | Fragment | null}
  */
 
 /**
  * Update or replace existing child node(s) with new value(s)
  * @param {Slot} slot Current slot
  * @param {any[] | any} newChildren New children
- * @param {Context} ctx Current context
  * @param {render} render Render function
  */
 export function morph (slot, newChildren, ctx, render) {
@@ -87,11 +88,22 @@ export function morph (slot, newChildren, ctx, render) {
         continue
       } else {
         // Otherwise, create a new child
-        newChild = render(newChild, ctx, function onupdate (value, render) {
-          const children = [...slot.children]
-          children[i] = value
-          morph(slot, children, ctx, render)
-        })
+        newChild = render(
+          newChild,
+          ctx,
+          function onupdate (value, ctx, afterupdate) {
+            if (!value) {
+              const removed = slot.children.splice(i, 1)
+              remove(removed.map(getChildren))
+              afterupdate(null)
+            } else {
+              const children = [...slot.children]
+              children[i] = value
+              morph(slot, children, ctx, render)
+              afterupdate(slot.children[i])
+            }
+          }
+        )
       }
     } else {
       // Reuse text nodes if possible
