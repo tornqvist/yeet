@@ -12,6 +12,7 @@ import {
   isArray,
   toNode,
   remove,
+  update,
   parse
 } from './utils.js'
 import { EVENT_PREFIX, EventHandler } from './event-handler.js'
@@ -34,6 +35,7 @@ import { refs } from './ref.js'
  * @param {object} [state] Initial root state
  */
 export function mount (partial, node, state = {}) {
+  if (typeof node === 'string') node = document.querySelector(node)
   const ctx = new Context(partial.key, state)
   const slot = new Slot([...node.childNodes], node)
   mountSlot(slot, partial, ctx, true)
@@ -97,16 +99,19 @@ function mountSlot (slot, newChildren, ctx, isRoot = false) {
           values,
           current
         )
-        if (slot.children.includes(node)) {
-          slot.children.splice(slot.children.indexOf(node), 1)
-        }
+        slot.children[i] = node
+        // if (slot.children.includes(node)) {
+        //   slot.children.splice(slot.children.indexOf(node), 1)
+        // }
         newChildren[i] = node
         cache.set(node, outer)
       } else {
         morph(slot, newChild, current, function render (partial, ctx, onupdate) {
-          return partial.render(ctx, onupdate)
+          // Spawn child context when provided with a component context
+          const child = partial.key !== ctx.key ? ctx.spawn(partial.key) : ctx
+          return partial.render(child, onupdate)
         })
-        newChildren[i] = slot.children[i]
+        newChildren[i] = slot.children[0]
       }
     } else {
       if (newChild != null) {
@@ -142,13 +147,23 @@ function mountSlot (slot, newChildren, ctx, isRoot = false) {
       for (let child = children.shift(); child; child = children.shift()) {
         if (isPlaceholder(templateNode)) {
           children.unshift(child)
+
           const id = getPlaceholderId(templateNode)
+          const cached = cache.get(child)
+          const value = values[id]
+
+          if (value instanceof Partial && value.key === cached.key) {
+            update(cached, value)
+            return child
+          }
+
           const slot = new Slot(children, parent)
           mountSlot(slot, values[id], ctx)
           ctx.editors.push(createNodeEditor(id, slot, ctx))
           if (!getChildren(slot).includes(child)) {
             remove(children.shift())
           }
+
           return slot
         }
         if (templateNode.nodeName === child.nodeName) {
@@ -169,9 +184,16 @@ function mountSlot (slot, newChildren, ctx, isRoot = false) {
             }
           }
           return child
+        } else if (templateNode.nodeType === TEXT_NODE) {
+          // Escape hatch for text nodes stripped in minification
+          children.unshift(child)
+          break
         } else if (child.nodeType !== TEXT_NODE) {
+          // Drop non-text nodes that can't be reused
+          child.remove()
           break
         }
+        child.remove()
       }
 
       if (isPlaceholder(templateNode)) {
@@ -181,11 +203,17 @@ function mountSlot (slot, newChildren, ctx, isRoot = false) {
         ctx.editors.push(createNodeEditor(id, slot, ctx))
         return slot
       } else {
-        const newChild = templateNode.cloneNode(true)
-        mountChildren([...newChild.childNodes], [], newChild, values, ctx)
+        const newChild = templateNode.cloneNode()
+        const newChildren = [...templateNode.childNodes].map(
+          (child) => child.cloneNode(true)
+        )
+        mountChildren(newChildren, [], newChild, values, ctx)
+        // Add rendered child to slot siblings
         const siblings = slots.get(parent)
-        siblings.push(newChild)
-        parent.append(newChild)
+        siblings?.push(newChild)
+        // Insert node at correct position
+        if (children.length) children[0].before(newChild)
+        else parent.append(newChild)
         return newChild
       }
     })
@@ -203,13 +231,13 @@ function mountAttributes (node, template, values) {
   const attributes = []
 
   for (let { name, value } of template.attributes) {
-    const nameIsPlaceholder = PLACEHOLDER.test(name)
-    const valueIsPlaceholder = PLACEHOLDER.test(value)
+    const nameHasPlaceholder = PLACEHOLDER.test(name)
+    const valueHasPlaceholder = PLACEHOLDER.test(value)
 
-    if (nameIsPlaceholder || valueIsPlaceholder) {
+    if (nameHasPlaceholder || valueHasPlaceholder) {
       attributes.push({ name, value })
-      name = nameIsPlaceholder ? resolvePlaceholders(name, values) : name
-      value = valueIsPlaceholder ? resolvePlaceholders(value, values) : value
+      name = nameHasPlaceholder ? resolvePlaceholders(name, values) : name
+      value = valueHasPlaceholder ? resolvePlaceholders(value, values) : value
       if (EVENT_PREFIX.test(name)) {
         const events = EventHandler.get(node)
         events.set(name, value)

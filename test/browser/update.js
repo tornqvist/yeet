@@ -1,6 +1,7 @@
 import { suite } from 'uvu'
 import * as assert from 'uvu/assert'
-import { html, mount, render } from '../../index.js'
+import { mount } from '../../mount.js'
+import { html, render } from '../../rewrite.js'
 
 const reuse = suite('reuse')
 const types = suite('types')
@@ -12,14 +13,14 @@ reuse('children in same place', function () {
   const header = html`<header>Hi</header>`
   const footer = html`<footer>Goodbye</footer>`
 
-  mount(div, foo())
+  render(foo(), div)
   assert.is(div.childElementCount, 3)
   assert.is(div.textContent.replace(/\s+/g, ''), 'HiWelcomeGoodbye')
 
   const [first,, third] = div.childNodes
   const firstFirst = first.firstElementChild
 
-  mount(div, bar())
+  mount(bar(), div)
   assert.is(div.childElementCount, 3)
   assert.is(div.textContent.replace(/\s+/g, ''), 'HiYoGoodbye')
   assert.is(firstFirst, div.childNodes[0].firstElementChild)
@@ -27,42 +28,38 @@ reuse('children in same place', function () {
 
   function foo () {
     return html`
-      <div>
-        ${html`<div>${header}</div>`}
-        <main>Welcome</main>
-        ${footer}
-      </div>
+      ${html`<div>${header}</div>`}
+      <main>Welcome</main>
+      ${footer}
     `
   }
 
   function bar () {
     return html`
-      <div>
-        ${html`<div>${header}</div>`}
-        <main>Yo</main>
-        ${footer}
-      </div>
+      ${html`<div>${header}</div>`}
+      <main>Yo</main>
+      ${footer}
     `
   }
 })
 
 reuse('partials in same place with dynamic id', function () {
   const items = Array(3).fill(null)
-  const ul = document.createElement('ul')
+  const div = document.createElement('ul')
 
-  mount(ul, main())
-  const children = [...ul.childNodes]
+  render(main(), div)
+  const children = [...div.firstElementChild.childNodes]
 
-  mount(ul, main())
-  assert.is(ul.childNodes[0], children[0])
-  assert.is(ul.childNodes[1], children[1])
-  assert.is(ul.childNodes[2], children[2])
+  mount(main(), div)
+  assert.is(div.firstElementChild.childNodes[0], children[0])
+  assert.is(div.firstElementChild.childNodes[1], children[1])
+  assert.is(div.firstElementChild.childNodes[2], children[2])
 
   function main () {
     return html`
       <ul>
         ${items.map((_, index) => html`
-          <li id="item-${index}">${index + 1}</li>
+          <li>${index + 1}</li>
         `)}
       </ul>
     `
@@ -70,30 +67,31 @@ reuse('partials in same place with dynamic id', function () {
 })
 
 types('can be nested array', function () {
-  const ul = render(html`
+  const div = document.createElement('div')
+  render(html`
     <ul>${[
       [html`<li>1</li>`],
       html`<li>2</li>`,
       [html`<li>3</li>`]
     ]}</ul>
-  `)
-  assert.is(ul.childElementCount, 3)
-  assert.is(ul.textContent, '123')
+  `, div)
+  assert.is(div.firstElementChild.childElementCount, 3)
+  assert.is(div.firstElementChild.textContent, '123')
 })
 
 types('can update from partial to array', function () {
-  const ul = document.createElement('ul')
+  const div = document.createElement('div')
 
-  mount(ul, main(child(1)))
-  assert.is(ul.childElementCount, 1)
-  assert.is(ul.textContent, '1')
+  render(main(child(1)), div)
+  assert.is(div.firstElementChild.childElementCount, 1)
+  assert.is(div.firstElementChild.textContent, '1')
 
-  const firstChild = ul.firstElementChild
+  const firstChild = div.firstElementChild.firstElementChild
 
-  mount(ul, main([1, 2, 3].map(child)))
-  assert.is(ul.childElementCount, 3)
-  assert.is(ul.textContent, '123')
-  assert.is(ul.firstElementChild, firstChild)
+  mount(main([1, 2, 3].map(child)), div)
+  assert.is(div.firstElementChild.childElementCount, 3)
+  assert.is(div.firstElementChild.textContent, '123')
+  assert.is(div.firstElementChild.firstElementChild, firstChild)
 
   function child (value) {
     return html`<li>${value}</li>`

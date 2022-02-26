@@ -20,7 +20,7 @@ export const TEXT_NODE = 3
 export const ELEMENT_NODE = 1
 export const COMMENT_NODE = 8
 export const FRAGMENT_NODE = 11
-export const PLACEHOLDER = /^yeet-(\d+)$/
+export const PLACEHOLDER = /yeet-(\w+)-(\d+)/
 
 export const { assign, keys, entries } = Object
 export const { isArray } = Array
@@ -104,7 +104,9 @@ function onunmount (node) {
  */
 export function isPlaceholder (node) {
   const { nodeValue, nodeType } = node
-  return nodeType === COMMENT_NODE && PLACEHOLDER.test(nodeValue)
+  if (nodeType !== COMMENT_NODE) return false
+  const match = nodeValue.match(PLACEHOLDER)
+  return match && match[1] === 'node'
 }
 
 /**
@@ -113,7 +115,7 @@ export function isPlaceholder (node) {
  * @returns {number}
  */
 export function getPlaceholderId (node) {
-  return +node.nodeValue.match(PLACEHOLDER)[1]
+  return +node.nodeValue.match(PLACEHOLDER)[2]
 }
 
 /**
@@ -130,9 +132,10 @@ export function parse (partial) {
   let html = strings.reduce(function compile (html, string, index) {
     html += string
     if (index === length - 1) return html
-    if (ATTRIBUTE.test(html) || COMMENT.test(html)) html += `yeet-${index}`
-    else if (TAG.test(html)) html += `data-yeet-${index}`
-    else html += `<!--yeet-${index}-->`
+    if (ATTRIBUTE.test(html)) html += `yeet-value-${index}`
+    else if (TAG.test(html)) html += `yeet-attribute-${index}`
+    else if (COMMENT.test(html)) html += `yeet-text-${index}`
+    else html += `<!--yeet-node-${index}-->`
     return html
   }, '').replace(LEADING_WHITESPACE, '$1').replace(TRAILING_WHITESPACE, '$1')
 
@@ -208,10 +211,10 @@ export function createAttributeEditor (node, attributes) {
  * @returns {any}
  */
 export function resolvePlaceholders (str, values) {
-  const [match, id] = str.match(PLACEHOLDER)
+  const [match, , id] = str.match(PLACEHOLDER)
   if (match === str) return values[+id]
   const pattern = new RegExp(PLACEHOLDER, 'g')
-  return str.replace(pattern, (_, id) => values[+id])
+  return str.replace(pattern, (_, type, id) => values[+id])
 }
 
 /**

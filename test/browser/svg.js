@@ -1,26 +1,29 @@
 import { suite } from 'uvu'
 import * as assert from 'uvu/assert'
-import { svg, html, render } from '../../index.js'
+import { svg, html, render } from '../../rewrite.js'
 
 const rendering = suite('rendering')
 
 rendering('with root svg tag', function () {
-  const res = render(svg`
+  const div = document.createElement('div')
+  render(svg`
     <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
       <circle cx="50" cy="50" r="50"/>
     </svg>
-  `)
-  assert.instance(res, window.SVGElement)
-  assert.instance(res.firstElementChild, window.SVGElement)
+  `, div)
+  assert.instance(div.firstElementChild, window.SVGElement)
+  assert.instance(div.firstElementChild.firstElementChild, window.SVGElement)
 })
 
 rendering('stand alone svg child node', function () {
-  const res = render(svg`<circle cx="50" cy="50" r="50"/>`)
-  assert.instance(res, window.SVGElement)
+  const parent = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  render(svg`<circle cx="50" cy="50" r="50"/>`, parent)
+  assert.instance(parent.firstElementChild, window.SVGElement)
 })
 
 rendering('as child of html tag', function () {
-  const res = render(html`
+  const div = document.createElement('div')
+  render(html`
     <div>
       ${svg`
         <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
@@ -28,9 +31,9 @@ rendering('as child of html tag', function () {
         </svg>
       `}
     </div>
-  `)
-  assert.instance(res.firstElementChild, window.SVGElement)
-  assert.instance(res.firstElementChild.firstElementChild, window.SVGElement)
+  `, div)
+  assert.instance(div.firstElementChild.firstElementChild, window.SVGElement)
+  assert.instance(div.firstElementChild.firstElementChild.firstElementChild, window.SVGElement)
 })
 
 rendering.run()

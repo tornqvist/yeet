@@ -1,7 +1,20 @@
 import { html, ref, render, Component } from '../../rewrite.js'
 import { mount } from '../../mount'
 
-mount(Component(App), document.body)
+document.body.innerHTML = ''
+
+render(main(child(1)), document.body)
+mount(main([1, 2, 3].map(child)), document.body)
+
+function child (value) {
+  return html`<li>${value}</li>`
+}
+
+function main (children) {
+  return html`<ul>${children}</ul>`
+}
+
+// mount(Component(App), document.body)
 
 function App (state, emit) {
   const input = ref()

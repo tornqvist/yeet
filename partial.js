@@ -1,8 +1,11 @@
 import {
   FRAGMENT_NODE,
+  COMMENT_NODE,
   ELEMENT_NODE,
   PLACEHOLDER,
+  TEXT_NODE,
   createAttributeEditor,
+  resolvePlaceholders,
   getPlaceholderId,
   isPlaceholder,
   update,
@@ -41,19 +44,11 @@ Partial.prototype.render = function (ctx, onupdate) {
   const template = parse(this)
   let node = template.cloneNode(true)
 
-  if (template.nodeType === ELEMENT_NODE) {
-    const editor = getAttributeEditor(node)
-    if (editor) ctx.editors.push(editor)
-  }
+  eachNode(node)
 
   const walker = document.createTreeWalker(node, 1 | 128, null, false)
   for (let current = walker.nextNode(); current; current = walker.nextNode()) {
-    if (isPlaceholder(current)) {
-      ctx.editors.push(createNodeEditor(current, ctx))
-    } else if (current.nodeType === ELEMENT_NODE) {
-      const editor = getAttributeEditor(current)
-      if (editor) ctx.editors.push(editor)
-    }
+    eachNode(current)
   }
 
   update(ctx, this)
@@ -65,6 +60,20 @@ Partial.prototype.render = function (ctx, onupdate) {
   cache.set(node, ctx)
 
   return node
+
+  function eachNode (node) {
+    const { nodeType, nodeValue } = node
+    if (isPlaceholder(node)) {
+      ctx.editors.push(createNodeEditor(node, ctx))
+    } else if (nodeType === ELEMENT_NODE) {
+      const editor = getAttributeEditor(node)
+      if (editor) ctx.editors.push(editor)
+    } else if (nodeType === COMMENT_NODE && PLACEHOLDER.test(nodeValue)) {
+      ctx.editors.push(function (partial) {
+        node.nodeValue = resolvePlaceholders(nodeValue, partial.values)
+      })
+    }
+  }
 }
 
 /**
@@ -79,7 +88,7 @@ function createNodeEditor (placeholder, ctx) {
   return function nodeEditor (partial) {
     const value = partial.values[id]
     morph(slot, value, ctx, function render (partial, ctx, onupdate) {
-      // Spawn a new context for partials that don't match the provided context
+      // Spawn child context when provided with a component context
       const child = partial.key !== ctx.key ? ctx.spawn(partial.key) : ctx
       return partial.render(child, onupdate)
     })

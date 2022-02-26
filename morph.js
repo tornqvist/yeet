@@ -38,7 +38,7 @@ import { Partial } from './partial.js'
  */
 export function morph (slot, newChildren, ctx, render) {
   // Do not mutate any existing arrays
-  newChildren = isArray(newChildren) ? [...newChildren] : [newChildren]
+  newChildren = isArray(newChildren) ? newChildren.flat() : [newChildren]
   const oldChildren = [...slot.children]
 
   /** @type {Map<any, number[]>} */
