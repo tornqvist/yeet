@@ -233,13 +233,12 @@ export function findNext (nodes, index = 0) {
 }
 
 /**
- * Pluck children from fragment
- * @template Item
- * @param {Item | Fragment} item Item to pluck from
- * @returns {(Node | Item)[]}
+ * Get children from container
+ * @param {Slot | Fragment} container Container to get from
+ * @returns {Node[]}
  */
-export function getChildren (item) {
-  if (item instanceof Fragment) return item.children
-  if (item instanceof Slot) return item.children.flatMap(getChildren)
-  return [item]
+export function getChildren (container) {
+  if (container instanceof Fragment) return container.children
+  if (container instanceof Slot) return container.children.flatMap(getChildren)
+  return [container]
 }
