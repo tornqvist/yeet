@@ -3,7 +3,6 @@ import {
   COMMENT_NODE,
   ELEMENT_NODE,
   PLACEHOLDER,
-  TEXT_NODE,
   createAttributeEditor,
   resolvePlaceholders,
   getPlaceholderId,
