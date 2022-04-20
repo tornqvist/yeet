@@ -1,5 +1,6 @@
 import { EVENT_PREFIX, EventHandler } from './event-handler.js'
 import { stack, cache } from './context.js'
+import { DISCONNECT } from './emitter.js'
 import { Fragment } from './fragment.js'
 import { Slot } from './slot.js'
 import { refs } from './ref.js'
@@ -40,6 +41,23 @@ export function update (ctx, partial) {
 }
 
 /**
+ * Throttle given function to only execute once per frame
+ * @param {function(...any): void} fn The function to throttle
+ * @returns {function(...any): void}
+ */
+export function throttle (fn) {
+  let scheduled = false
+  return function (...args) {
+    if (scheduled) return
+    scheduled = true
+    window.requestAnimationFrame(function () {
+      scheduled = false
+      fn(...args)
+    })
+  }
+}
+
+/**
  * Remove node
  * @param {Node|Node[]} node Node to remove
  */
@@ -48,7 +66,7 @@ export function remove (node) {
     node.forEach(remove)
   } else if (node) {
     node.remove()
-    onunmount(node)
+    onremove(node)
   }
 }
 
@@ -63,7 +81,7 @@ export function replace (oldNode, newNode) {
     replace(oldNode[0], newNode)
   } else {
     oldNode.replaceWith(newNode)
-    onunmount(oldNode)
+    onremove(oldNode)
   }
 }
 
@@ -81,20 +99,6 @@ export function toNode (value) {
     return fragment
   }
   return document.createTextNode(String(value))
-}
-
-/**
- * Walk the DOM tree calling onunmout on every context encountered
- * @param {Node} node The DOM node being unmounted
- */
-function onunmount (node) {
-  const walker = document.createTreeWalker(node, 1 | 4 | 128, null, false)
-  let current = walker.nextNode()
-  while (current) {
-    const ctx = cache.get(current)
-    if (ctx?.onunmount) ctx.onunmount()
-    current = walker.nextNode()
-  }
 }
 
 /**
@@ -241,4 +245,13 @@ export function getChildren (container) {
   if (container instanceof Fragment) return container.children
   if (container instanceof Slot) return container.children.flatMap(getChildren)
   return [container]
+}
+
+/**
+ * Walk the DOM tree calling onunmout on every context encountered
+ * @param {Node} node The DOM node being removed
+ */
+function onremove (node) {
+  const ctx = cache.get(node)
+  if (ctx) ctx.emit(DISCONNECT)
 }

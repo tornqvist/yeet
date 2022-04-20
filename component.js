@@ -1,7 +1,7 @@
-import { RENDER } from './emitter.js'
 import { Partial } from './partial.js'
 import { stack, cache } from './context.js'
-import { assign, update, toNode } from './utils.js'
+import { RENDER, DISCONNECT } from './emitter.js'
+import { assign, update, throttle, toNode } from './utils.js'
 
 /** @typedef {import('./context.js').Context} Context */
 /** @typedef {import('./morph.js').onupdate} onupdate */
@@ -66,13 +66,11 @@ CreateComponent.prototype.initialize = function (ctx, onupdate) {
   let { fn, args } = this
   let rerender, child
 
-  console.log('initialize', fn.name)
-
   ctx.editors.push(function componentEditor (component) {
     args = component.args
     handleUpdate()
   })
-  ctx.emitter.on(RENDER, handleUpdate)
+  ctx.emitter.on(RENDER, throttle(handleUpdate))
 
   try {
     stack.unshift(ctx)
@@ -149,7 +147,7 @@ CreateComponent.prototype.initialize = function (ctx, onupdate) {
           return walk(wrap(value(...args)), depth + 1, value)
         } finally {
           const deplete = queue(gen)
-          if (depth === ON_INIT) ctx.onunmount = deplete
+          if (depth === ON_INIT) ctx.emitter.on(DISCONNECT, deplete)
           if (depth === ON_UPDATE) window.requestAnimationFrame(deplete)
           if (depth === ON_RENDER) deplete()
         }

@@ -1,4 +1,4 @@
-import { WILDCARD, RENDER, Emitter } from './emitter.js'
+import { DISCONNECT, WILDCARD, RENDER, Emitter } from './emitter.js'
 
 /** @typedef {import('./partial.js').Partial} Partial */
 /** @typedef {function(Partial): void} Editor */
@@ -21,11 +21,20 @@ export class Context {
     this.state = state
     this.emitter = new Emitter()
 
+    /** @type {Set<Context>} Child contexts */
+    this.children = new Set()
+
     /** @type {Editor[]} Attached editors */
     this.editors = []
 
     /** @type {function(...any): void} Emit event to context emitter */
     this.emit = this.emitter.emit.bind(this.emitter)
+
+    this.emitter.on(DISCONNECT, () => {
+      for (const child of this.children) {
+        child.emitter.emit(DISCONNECT)
+      }
+    })
   }
 
   /**
@@ -35,6 +44,8 @@ export class Context {
    */
   spawn (key) {
     const child = new Context(key, Object.create(this.state))
+    this.children.add(child)
+    child.emitter.on(DISCONNECT, () => this.children.delete(child))
     child.emitter.on(WILDCARD, (event, ...args) => {
       if (event !== RENDER) this.emit(event, ...args)
     })

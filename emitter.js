@@ -1,5 +1,6 @@
 export const WILDCARD = '*'
 export const RENDER = 'render'
+export const DISCONNECT = 'disconnect'
 
 /**
  * Generic event emitter
@@ -34,7 +35,9 @@ export class Emitter extends Map {
    * @param {...any} args Event parameters to be forwarded to listeners
    */
   emit (event, ...args) {
-    if (event !== WILDCARD) this.emit(WILDCARD, event, ...args)
+    if (event !== WILDCARD && event !== DISCONNECT) {
+      this.emit(WILDCARD, event, ...args)
+    }
     if (!this.has(event)) return
     for (const fn of this.get(event)) fn(...args)
   }
