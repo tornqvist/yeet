@@ -1,20 +1,6 @@
-import { html, ref, render, Component } from '../../rewrite.js'
-import { mount } from '../../mount'
+import { html, ref, render, mount, Component } from '../../rewrite.js'
 
-document.body.innerHTML = ''
-
-render(main(child(1)), document.body)
-mount(main([1, 2, 3].map(child)), document.body)
-
-function child (value) {
-  return html`<li>${value}</li>`
-}
-
-function main (children) {
-  return html`<ul>${children}</ul>`
-}
-
-// mount(Component(App), document.body)
+mount(Component(App), document.body)
 
 function App (state, emit) {
   const input = ref()
@@ -23,7 +9,7 @@ function App (state, emit) {
   return function () {
     return html`
       <h1>${html`Hello <strong>${name}</strong>!`}</h1>
-      <input ref=${input}>
+      <input value="${name}" ref=${input}>
       <button onclick=${onclick}>Set name</button>
       ${Component(Counter)}
       ${Component(List)}
@@ -37,17 +23,17 @@ function App (state, emit) {
 }
 
 function List (state, emit) {
-  const list = ['one', 'two', 'three']
+  const list = ['one', 'two', 'three', 'four', 'five']
 
   return function () {
     return html`
       <ul>${list.map((num) => Component(ListItem, { num }))}</ul>
-      <button onclick=${onclick}>Reverse</button>
+      <button onclick=${onclick}>Shuffle</button>
     `
   }
 
   function onclick () {
-    list.reverse()
+    list.sort(() => Math.random() - 0.5)
     emit('render')
   }
 }

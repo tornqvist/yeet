@@ -13,10 +13,9 @@ export function Slot (children, parent) {
   if (!siblings) slots.set(parent, siblings = [...parent.childNodes])
 
   const index = children.length
-    ? siblings.includes(children[0])
-        ? siblings.indexOf(children[0])
-        : siblings.length
+    ? siblings.indexOf(children[0])
     : siblings.length
+
   siblings[index] = this
 
   this.index = index

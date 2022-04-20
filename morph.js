@@ -84,7 +84,7 @@ export function morph (slot, newChildren, ctx, render) {
         const cached = cache.get(oldChildren[index])
         update(cached, newChild)
         oldChildren[index] = null
-        newChild = slot.children[i]
+        newChildren[i] = slot.children[i]
         continue
       } else {
         // Otherwise, create a new child
