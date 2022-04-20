@@ -1,31 +1,36 @@
 import { suite } from 'uvu'
 import * as assert from 'uvu/assert'
-import { html, Component, render } from '../../../index.js'
+import { html, Component, render } from '../../../rewrite.js'
 
 const element = suite('element')
 const children = suite('children')
 const fragment = suite('fragment')
 
 element('one-off', function () {
-  const res = render(Component(() => html`<h1>Hello planet!</h1>`))
-  assert.is(res.outerHTML, '<h1>Hello planet!</h1>')
+  const div = document.createElement('div')
+  render(Component(() => html`<h1>Hello planet!</h1>`), div)
+  assert.is(div.innerHTML, '<h1>Hello planet!</h1>')
 })
 
 element('w/ lifecycle', function () {
-  const res = render(Component(() => () => () => html`<h1>Hello planet!</h1>`))
-  assert.is(res.outerHTML, '<h1>Hello planet!</h1>')
+  const div = document.createElement('div')
+  render(Component(() => () => () => html`<h1>Hello planet!</h1>`), div)
+  assert.is(div.innerHTML, '<h1>Hello planet!</h1>')
 })
 
 children('return just child', function () {
+  const div = document.createElement('div')
   const Main = Component(function () {
     return Component(function () {
       return html`<div>Hello world!</div>`
     })
   })
-  assert.is(render(Main).outerHTML, '<div>Hello world!</div>')
+  render(Main, div)
+  assert.is(div.innerHTML, '<div>Hello world!</div>')
 })
 
 children('nested component', function () {
+  const div = document.createElement('div')
   const Main = Component(function Main (state, emit) {
     return html`
       <span>
@@ -33,13 +38,15 @@ children('nested component', function () {
       </span>
     `
   })
-
   const res = html`
     <div>
       ${Main({ test: 'test' })}
     </div>
   `
-  assert.snapshot(dedent(render(res).outerHTML), dedent`
+
+  render(res, div)
+
+  assert.snapshot(dedent(div.innerHTML), dedent`
     <div>
       <span>
         Hello world!
@@ -55,6 +62,7 @@ children('nested component', function () {
 })
 
 children('array of components', function () {
+  const div = document.createElement('div')
   const children = new Array(3).fill(Child).map(Component)
   const Main = Component(function () {
     return function () {
@@ -62,7 +70,9 @@ children('array of components', function () {
     }
   })
 
-  assert.snapshot(render(Main).outerHTML, dedent`
+  render(Main, div)
+
+  assert.snapshot(div.innerHTML, dedent`
     <ul><li>1</li><li>2</li><li>3</li></ul>
   `)
 
@@ -72,16 +82,14 @@ children('array of components', function () {
 })
 
 fragment('can render fragment', function () {
-  assert.snapshot(dedent(render(html`
-    <ul>
-      ${Component(Main)}
-    </ul>
-  `).outerHTML), dedent`
-    <ul>
-    <li>1</li>
+  const ul = document.createElement('ul')
+
+  render(Component(Main), ul)
+
+  assert.snapshot(dedent(ul.outerHTML), dedent`
+    <ul><li>1</li>
     <li>2</li>
-    <li>3</li>
-    </ul>
+    <li>3</li></ul>
   `)
 
   function Main () {
