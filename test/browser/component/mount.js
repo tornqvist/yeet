@@ -1,6 +1,6 @@
 import { suite } from 'uvu'
 import * as assert from 'uvu/assert'
-import { html, mount, render, Component } from '../../../rewrite.js'
+import { html, mount, Component } from '../../../rewrite.js'
 
 const test = suite('mount')
 
@@ -27,22 +27,22 @@ test('updates in place', async function () {
 
   div.innerHTML = '<h1>Hello <em>world</em>!</h1>'
   const h1 = div.firstChild
-  const [hello, , exclamation] = div.childNodes
+  const [hello, , exclamation] = h1.childNodes
 
-  render(html`<h1>Hi ${Component(Main)}!</h1>`, div)
+  mount(html`<h1>Hi ${Component(Main)}!</h1>`, div)
 
-  assert.is(div.firstChild, h1)
-  assert.is(h1.childNodes.length, 2)
-  assert.is(h1.childNodes[0], hello)
-  assert.is(h1.childNodes[1], exclamation)
+  assert.is(div.firstChild, h1, 'same h1')
+  assert.is(h1.childNodes.length, 2, 'one child removed')
+  assert.is(h1.childNodes[0], hello, 'preceeding text is preserved')
+  assert.is(h1.childNodes[1], exclamation, 'following text is preserved')
   assert.is(div.innerHTML, '<h1>Hi !</h1>')
 
   await new Promise(resolve => setTimeout(resolve, 100))
 
-  assert.is(div.firstChild, h1)
-  assert.is(h1.childNodes.length, 3)
-  assert.is(h1.childNodes[0], hello)
-  assert.is(h1.childNodes[2], exclamation)
+  assert.is(div.firstChild, h1, 'same h1')
+  assert.is(h1.childNodes.length, 3, 'one child added')
+  assert.is(h1.childNodes[0], hello, 'preceeding text is still preserved')
+  assert.is(h1.childNodes[2], exclamation, 'following text is still preserved')
   assert.is(div.innerHTML, '<h1>Hi <em>planet</em>!</h1>')
 
   function Main (state, emit) {

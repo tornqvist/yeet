@@ -6,19 +6,13 @@ const element = suite('element')
 const children = suite('children')
 const fragment = suite('fragment')
 
-element('one-off', function () {
+element('immedate return partial', function () {
   const div = document.createElement('div')
   render(Component(() => html`<h1>Hello planet!</h1>`), div)
   assert.is(div.innerHTML, '<h1>Hello planet!</h1>')
 })
 
-element('w/ lifecycle', function () {
-  const div = document.createElement('div')
-  render(Component(() => () => () => html`<h1>Hello planet!</h1>`), div)
-  assert.is(div.innerHTML, '<h1>Hello planet!</h1>')
-})
-
-children('return just child', function () {
+children('immediate return component', function () {
   const div = document.createElement('div')
   const Main = Component(function () {
     return Component(function () {
@@ -27,6 +21,12 @@ children('return just child', function () {
   })
   render(Main, div)
   assert.is(div.innerHTML, '<div>Hello world!</div>')
+})
+
+element('w/ lifecycle', function () {
+  const div = document.createElement('div')
+  render(Component(() => () => () => html`<h1>Hello planet!</h1>`), div)
+  assert.is(div.innerHTML, '<h1>Hello planet!</h1>')
 })
 
 children('nested component', function () {
