@@ -1,4 +1,5 @@
 const RENDER = 'render'
+const DISCONNECT = 'disconnect'
 const REF_ATTR = /\s*ref=("|')?$/i
 const ATTRIBUTE = /<[a-z-]+[^>]*?\s+(([^\t\n\f "'>/=]+)=("|')?)?$/i
 const BOOL_PROPS = [
@@ -397,7 +398,7 @@ class Emitter extends Map {
    * @memberof Emitter
    */
   emit (event, ...args) {
-    if (event === RENDER) return
+    if (event === RENDER || event === DISCONNECT) return
     if (event !== '*') this.emit('*', event, ...args)
     if (!this.has(event)) return
     for (const fn of this.get(event)) fn(...args)
