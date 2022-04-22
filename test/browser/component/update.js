@@ -1,75 +1,73 @@
 import { suite } from 'uvu'
 import * as assert from 'uvu/assert'
-import { html, mount, render, use, Component } from '../../../index.js'
+import { html, render, use, Component } from '../../../rewrite.js'
 
 const element = suite('element')
 const rerender = suite('rerender')
 const fragment = suite('fragment')
 
-element('does not update when shallow', function () {
+element('does not update when shallow', async function () {
   let name = 'planet'
-  const el = document.createElement('h1')
-  const Main = Component(() => html`<h1>Hello ${name}!</h1>`)
+  const div = document.createElement('div')
 
-  mount(el, Main)
-  assert.is(el.outerHTML, '<h1>Hello planet!</h1>')
+  render(Component(function (state, emit) {
+    return function * () {
+      yield Component(() => html`<h1>Hello ${name}!</h1>`)
+      if (name === 'planet') {
+        name = 'world'
+        emit('render')
+      }
+    }
+  }), div)
 
-  name = 'world'
-  mount(el, Main)
-  assert.is(el.outerHTML, '<h1>Hello planet!</h1>')
-})
+  assert.is(div.innerHTML, '<h1>Hello planet!</h1>', 'initial render')
 
-element('does update if update function provided', function () {
-  const el = document.createElement('h1')
-  const Main = Component(() => (name) => html`<h1>Hello ${name}!</h1>`)
-
-  mount(el, Main('planet'))
-  assert.is(el.outerHTML, '<h1>Hello planet!</h1>')
-  const [hello, planet, exlamation] = el.childNodes
-
-  mount(el, Main('world'))
-  assert.is(el.outerHTML, '<h1>Hello world!</h1>')
-  assert.ok(hello.isSameNode(el.childNodes[0]))
-  assert.ok(planet.isSameNode(el.childNodes[1]))
-  assert.ok(exlamation.isSameNode(el.childNodes[2]))
-})
-
-rerender('rerender on render event', async function () {
-  let rerender
-  let value = 'world'
-  const res = render(html`<div>${Component(Main)}</div>`)
-  assert.is(res.outerHTML, '<div><h1>Hello world!</h1></div>')
-
-  value = 'planet'
-  rerender()
   await new Promise(function (resolve) {
     window.requestAnimationFrame(function () {
-      assert.is(res.outerHTML, '<div><h1>Hello planet!</h1></div>')
+      assert.is(div.innerHTML, '<h1>Hello planet!</h1>', 'value did not change')
       resolve()
     })
   })
+})
 
-  function Main (state, emit) {
-    rerender = () => emit('render')
-    return function onupdate () {
-      return html`<h1>Hello ${value}!</h1>`
+element('does update if update function is provided', async function () {
+  let name = 'planet'
+  const div = document.createElement('div')
+
+  render(Component(function (state, emit) {
+    return function * () {
+      yield Component(() => () => html`<h1>Hello ${name}!</h1>`)
+      if (name === 'planet') {
+        name = 'world'
+        emit('render')
+      }
     }
-  }
+  }), div)
+
+  assert.is(div.innerHTML, '<h1>Hello planet!</h1>', 'initial render')
+
+  await new Promise(function (resolve) {
+    window.requestAnimationFrame(function () {
+      window.requestAnimationFrame(function () {
+        assert.is(div.innerHTML, '<h1>Hello world!</h1>', 'value changed')
+        resolve()
+      })
+    })
+  })
 })
 
 rerender('render event does not bubble', async function () {
-  let rerender
   let outer = 'foo'
   let inner = 'bar'
-  const res = render(html`<div>${Component(Parent)}</div>`)
-  assert.is(res.outerHTML, '<div><span>foo</span><span>bar</span></div>')
+  const div = document.createElement('div')
 
-  outer = 'bin'
-  inner = 'baz'
-  rerender()
+  render(Component(Parent), div)
+
+  assert.is(div.outerHTML, '<div><span>foo</span><span>bar</span></div>', 'initial render')
+
   await new Promise(function (resolve) {
     window.requestAnimationFrame(function () {
-      assert.is(res.outerHTML, '<div><span>foo</span><span>baz</span></div>')
+      assert.is(div.outerHTML, '<div><span>foo</span><span>bar</span></div>', 'all unchanged')
       resolve()
     })
   })
@@ -84,50 +82,72 @@ rerender('render event does not bubble', async function () {
   }
 
   function Child (state, emit) {
-    rerender = () => emit('render')
-    return function onupdate () {
-      return html`<span>${inner}</span>`
+    return function * () {
+      yield html`<span>${inner}</span>`
+      if (inner === 'bar') {
+        outer = 'bin'
+        inner = 'baz'
+        emit('render')
+      }
     }
   }
 })
 
 rerender('update single text node', async function () {
-  let rerender
   let value = 'world'
-  const res = render(html`<h1>Hello ${Component(Main)}!</h1>`)
-  assert.is(res.outerHTML, '<h1>Hello world!</h1>')
+  const div = document.createElement('div')
 
-  value = 'planet'
-  rerender()
+  render(html`<h1>Hello ${Component(Main)}!</h1>`, div)
+
+  assert.is(div.innerHTML, '<h1>Hello world!</h1>', 'initial render')
+
   await new Promise(function (resolve) {
     window.requestAnimationFrame(function () {
-      assert.is(res.outerHTML, '<h1>Hello planet!</h1>')
-      resolve()
+      window.requestAnimationFrame(function () {
+        assert.is(div.innerHTML, '<h1>Hello planet!</h1>', 'value changed')
+        resolve()
+      })
     })
   })
 
   function Main (state, emit) {
-    rerender = () => emit('render')
-    return function onupdate () {
-      return html`${value}`
+    return function * () {
+      yield html`${value}`
+      if (value === 'world') {
+        value = 'planet'
+        emit('render')
+      }
     }
   }
 })
 
-fragment('can update fragment', function () {
+fragment('can update fragment', async function () {
   const ul = document.createElement('ul')
-  mount(ul, html`<ul>${Component(Main)}</ul>`)
-  assert.snapshot(ul.outerHTML, '<ul><li>1</li><li>2</li><li>3</li></ul>')
+
+  render(Component(Main), ul)
+
+  assert.snapshot(ul.outerHTML, '<ul><li>1</li><li>2</li><li>3</li></ul>', 'initial render')
+
+  await new Promise(function (resolve) {
+    window.requestAnimationFrame(function () {
+      window.requestAnimationFrame(function () {
+        assert.snapshot(ul.outerHTML, '<ul><li>1</li><li>3</li><li>3</li></ul>', 'value changed')
+        resolve()
+      })
+    })
+  })
 
   function Child () {
-    return function () {
-      return html`<li>2</li>`
+    return function ({ num }) {
+      return html`<li>${num}</li>`
     }
   }
 
-  function Main () {
-    return function () {
-      return html`<li>1</li>${Component(Child)}<li>3</li>`
+  function Main (state, emit) {
+    let num = 2
+    return function * () {
+      yield html`<li>1</li>${Component(Child, { num })}<li>3</li>`
+      if (++num === 3) emit('render')
     }
   }
 })
