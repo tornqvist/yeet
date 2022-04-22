@@ -83,10 +83,8 @@ export function raw (value) {
  * @param {object} [state={}] Root state
  * @returns {Partial}
  */
-export function mount (selector, partial, state = {}) {
-  partial.selector = selector
-  partial.state = state
-  return partial
+export function mount (partial, selector, state = {}) {
+  return { partial, selector, state }
 }
 
 /**
@@ -353,7 +351,7 @@ function isGenerator (obj) {
  * Create a reference to a element node (available in Browser only)
  * @class Ref
  */
-class Ref {}
+export class Ref {}
 
 /**
  * Generic event emitter

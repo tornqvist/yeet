@@ -1,6 +1,6 @@
 import { suite } from 'uvu'
 import * as assert from 'uvu/assert'
-import { html, Component, render } from '../../../rewrite.js'
+import { html, Component, render } from '../../../index.js'
 
 const element = suite('element')
 const children = suite('children')

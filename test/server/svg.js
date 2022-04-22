@@ -1,6 +1,6 @@
 import { suite } from 'uvu'
 import * as assert from 'uvu/assert'
-import { svg, html, render } from '../../server.js'
+import { svg, html, render } from '#yeet'
 
 const rendering = suite('rendering')
 

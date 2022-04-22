@@ -1,7 +1,7 @@
 import { suite } from 'uvu'
 import { Readable } from 'stream'
 import * as assert from 'uvu/assert'
-import { html, Partial, mount, render } from '../../server.js'
+import { html, Partial, mount, render } from '#yeet'
 
 const partial = suite('partial')
 const mounting = suite('mount')
@@ -40,13 +40,15 @@ partial('can render to stream', async function () {
   assert.is(string, '<div>Hello world!</div>')
 })
 
-mounting('decorates partial', async function () {
-  const initialState = {}
-  const res = mount('body', html`<body>Hello planet!</body>`, initialState)
-  assert.instance(res, Partial)
-  assert.is(res.state, initialState)
+mounting('mount return value', async function () {
+  const state = {}
+  const selector = 'body'
+  const partial = html`<h1>Hello planet!</h1>`
+  const res = mount(partial, selector, state)
+  assert.is(res.partial, partial)
   assert.is(res.selector, 'body')
-  assert.is(await render(res), '<body>Hello planet!</body>')
+  assert.is(res.state, state)
+  assert.is(await render(res.partial), '<h1>Hello planet!</h1>')
 })
 
 partial.run()

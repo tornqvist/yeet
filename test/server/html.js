@@ -1,6 +1,6 @@
 import { suite } from 'uvu'
 import * as assert from 'uvu/assert'
-import { html, raw, ref, render } from '../../server.js'
+import { html, raw, ref, render } from '#yeet'
 
 const children = suite('children')
 const attributes = suite('attributes')

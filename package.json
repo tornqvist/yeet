@@ -2,45 +2,59 @@
   "name": "yeet",
   "description": "A teeny-weeny frontend framework for creating websites",
   "version": "1.0.0-1",
-  "main": "dist/server.cjs.js",
-  "browser": "dist/browser.cjs.js",
+  "main": "dist/cjs/server.cjs.js",
+  "browser": "dist/cjs/browser.cjs.js",
+  "unpkg": "dist/browser.esm.js",
   "types": "dist/index.d.ts",
   "type": "module",
-  "exports": {
-    ".": {
-      "import": "./index.js",
+  "imports": {
+    "#yeet": {
       "node": "./server.js",
+      "import": "./index.js",
+      "default": "./index.js"
+    }
+  },
+  "exports": {
+    "types": "./dist/index.d.ts",
+    "development": {
+      "node": "./server.js",
+      "import": "./index.js",
       "default": "./index.js"
     },
-    "./mount": {
-      "import": "./mount.js",
-      "node": "./server.js",
-      "default": "./mount.js"
-    }
+    "node": {
+      "import": "./dist/server.esm.js",
+      "require": "./dist/cjs/server.cjs.js"
+    },
+    "deno": "./dist/server.esm.js",
+    "import": "./dist/browser.esm.js",
+    "default": "./dist/cjs/browser.cjs.js"
   },
   "scripts": {
     "test": "uvu test/server && umu test/browser && standard",
-    "build": "npm run build:server && npm run build:browser && echo '{\"type\":\"commonjs\"}' > dist/package.json",
-    "build:server": "rollup --no-esModule --format=cjs --file=dist/server.cjs.js server.js",
-    "build:browser": "rollup --no-esModule --format=cjs --file=dist/browser.cjs.js index.js",
-    "generate": "tsc *.js --declaration --allowJs --emitDeclarationOnly --outFile dist/index.d.ts",
-    "prepublishOnly": "npm run build && npm run generate"
+    "build": "npm run build:esm && npm run build:cjs && npm run build:types",
+    "build:esm": "npm run build:esm:server && npm run build:esm:browser",
+    "build:esm:server": "rollup -p @rollup/plugin-strip -o dist/server.esm.js server.js",
+    "build:esm:browser": "rollup -p @rollup/plugin-strip -o dist/browser.esm.js index.js",
+    "build:cjs": "npm run build:cjs:server && npm run build:cjs:browser && echo '{\"type\":\"commonjs\"}' > dist/cjs/package.json",
+    "build:cjs:server": "rollup --no-esModule -f cjs -p @rollup/plugin-strip -o dist/cjs/server.cjs.js server.js",
+    "build:cjs:browser": "rollup --no-esModule -f umd -n yeet -p @rollup/plugin-strip -o dist/cjs/browser.cjs.js index.js",
+    "build:types": "tsc *.js --declaration --allowJs --emitDeclarationOnly --outFile dist/index.d.ts",
+    "prepublishOnly": "npm run build"
   },
   "files": [
     "index.js",
-    "mount.js",
     "server.js",
+    "lib",
     "dist"
   ],
   "author": "Carl Törnqvist <carl@tornqv.ist>",
   "license": "MIT",
   "devDependencies": {
+    "@rollup/plugin-strip": "^2.1.0",
+    "rollup": "^2.70.2",
     "standard": "^16.0.4",
     "typescript": "^4.5.4",
     "umu": "^0.0.2",
-    "uvu": "^0.5.2"
-  },
-  "dependencies": {
-    "rollup-plugin-terser": "^7.0.2"
+    "uvu": "^0.5.3"
   }
 }

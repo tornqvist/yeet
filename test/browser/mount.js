@@ -1,6 +1,6 @@
 import { suite } from 'uvu'
 import * as assert from 'uvu/assert'
-import { html, mount } from '../../rewrite.js'
+import { html, mount } from '../../index.js'
 
 const test = suite('mount')
 

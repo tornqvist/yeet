@@ -1,7 +1,7 @@
 import { suite } from 'uvu'
 import { Readable } from 'stream'
 import * as assert from 'uvu/assert'
-import { html, Partial, Component, use, mount, render } from '../../server.js'
+import { html, Partial, Component, use, mount, render } from '#yeet'
 
 const api = suite('api')
 const lifecycle = suite('lifecycle')
@@ -71,12 +71,13 @@ api('calling arguments override declaration arguments', async function () {
 })
 
 api('can mount', async function () {
-  const res = mount('body', Component(Main))
-  assert.is(res.selector, 'body')
-  assert.is(await render(res), '<body>Hello world!</body>')
+  const selector = 'body'
+  const res = mount(Component(Main), selector)
+  assert.is(res.selector, selector)
+  assert.is(await render(res.partial), '<h1>Hello world!</h1>')
 
   function Main (state, emit) {
-    return html`<body>Hello world!</body>`
+    return html`<h1>Hello world!</h1>`
   }
 })
 

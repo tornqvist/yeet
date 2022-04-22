@@ -1,4 +1,4 @@
-import { html, ref, render, mount, Component } from '../../rewrite.js'
+import { html, ref, mount, Component } from '../../index.js'
 
 mount(Component(App), document.body)
 
