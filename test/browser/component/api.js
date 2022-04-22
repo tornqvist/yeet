@@ -339,6 +339,51 @@ lifecycle('children unmount w/ parent', async function () {
   }
 })
 
+lifecycle('disconnect emitted when removed', async function () {
+  let disconnected = false
+  let triggered = false
+
+  const div = document.createElement('div')
+
+  render(Component(Main), div)
+
+  assert.is(div.innerHTML, '<div><h1>Hello world!</h1></div>')
+
+  await new Promise(function (resolve) {
+    window.requestAnimationFrame(function () {
+      window.requestAnimationFrame(function () {
+        assert.is(div.innerHTML, '<div></div>')
+        assert.ok(triggered)
+        resolve()
+      })
+    })
+  })
+
+  function Child () {
+    use(function (state, emitter) {
+      emitter.on('disconnect', function () {
+        triggered = true
+      })
+    })
+    return function * () {
+      yield html`<h1>Hello world!</h1>`
+    }
+  }
+
+  function Main (state, emit) {
+    use(function (state, emitter) {
+      emitter.on('disconnect', assert.unreachable)
+    })
+    return function * () {
+      yield html`<div>${disconnected ? null : Component(Child)}</div>`
+      if (!disconnected) {
+        disconnected = true
+        emit('render')
+      }
+    }
+  }
+})
+
 component.run()
 args.run()
 state.run()
