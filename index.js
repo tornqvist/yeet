@@ -21,7 +21,7 @@ export function html (strings, ...values) {
  * @returns {Partial}
  */
 export function svg (strings, ...values) {
-  return new Partial(strings, values, true)
+  return new Partial(strings, values, { isSVG: true })
 }
 
 /**
@@ -30,7 +30,7 @@ export function svg (strings, ...values) {
  * @returns {Partial}
  */
 export function raw (value) {
-  return new Partial([String(value)], [])
+  return new Partial([String(value)], [], { key: value })
 }
 
 /**

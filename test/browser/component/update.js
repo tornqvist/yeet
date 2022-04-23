@@ -1,6 +1,6 @@
 import { suite } from 'uvu'
 import * as assert from 'uvu/assert'
-import { html, render, use, Component } from '../../../index.js'
+import { html, raw, render, use, Component } from '../../../index.js'
 
 const element = suite('element')
 const rerender = suite('rerender')
@@ -121,7 +121,33 @@ rerender('update single text node', async function () {
   }
 })
 
-fragment('can update fragment', async function () {
+rerender('raw', async function () {
+  const div = document.createElement('div')
+
+  render(Component(Main), div)
+
+  const h1 = div.firstElementChild.firstElementChild
+  assert.snapshot(div.innerHTML, '<h1><span>Hello world</span>!</h1>')
+
+  await new Promise(function (resolve) {
+    window.requestAnimationFrame(function () {
+      window.requestAnimationFrame(function () {
+        assert.ok(h1.isSameNode(div.firstElementChild.firstElementChild))
+        resolve()
+      })
+    })
+  })
+
+  function Main (state, emit) {
+    let rerender = 0
+    return function * () {
+      yield html`<h1>${raw('<span>Hello world</span>')}!</h1>`
+      if (!rerender++) emit('render')
+    }
+  }
+})
+
+fragment('update fragment', async function () {
   const ul = document.createElement('ul')
 
   render(Component(Main), ul)
