@@ -152,6 +152,35 @@ fragment('can update fragment', async function () {
   }
 })
 
+fragment('replace child', async function () {
+  const div = document.createElement('div')
+
+  render(Component(Main), div)
+
+  assert.snapshot(div.outerHTML, '<div><span>Hello</span> </div>', 'initial render')
+
+  await new Promise(function (resolve) {
+    window.requestAnimationFrame(function () {
+      window.requestAnimationFrame(function () {
+        assert.snapshot(div.outerHTML, '<div><span>Hello</span> <em>world!</em></div>', 'value changed')
+        resolve()
+      })
+    })
+  })
+
+  function Main (state, emit) {
+    let renders = 0
+    return function * () {
+      yield html`<span>Hello</span> ${renders ? Component(Child) : null}`
+      if (!renders++) emit('render')
+    }
+  }
+
+  function Child () {
+    return () => html`<em>world!</em>`
+  }
+})
+
 element.run()
 rerender.run()
 fragment.run()
