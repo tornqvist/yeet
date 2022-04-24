@@ -53,6 +53,13 @@ test('updates in place', async function () {
   }
 })
 
+test('remove unused nodes', function () {
+  const div = document.createElement('div')
+  div.innerHTML = 'Hello <span>world!</span>'
+  mount(Component(() => html`Hello ${null}`), div)
+  assert.is(div.innerHTML, 'Hello ')
+})
+
 // reuse('immediate child component', function () {
 //   const div = document.createElement('div')
 //   let init = 0

@@ -48,6 +48,13 @@ test('mount children with missing whitespace', function () {
   assert.is(div.innerHTML, '<p><span>one</span> <strong>two</strong> <span>three</span>\n    </p>')
 })
 
+test('remove unused nodes', function () {
+  const div = document.createElement('div')
+  div.innerHTML = 'Hello <span>world!</span>'
+  mount(html`Hello ${null}`, div)
+  assert.is(div.innerHTML, 'Hello ')
+})
+
 test('mount fragment', function () {
   const div = document.createElement('div')
   div.innerHTML = 'Hello <span>world!</span>'
