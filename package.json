@@ -17,7 +17,9 @@
   "exports": {
     "types": "./dist/index.d.ts",
     "development": {
+      "bun": "./server.js",
       "node": "./server.js",
+      "deno": "./server.js",
       "import": "./index.js",
       "default": "./index.js"
     },
@@ -49,12 +51,30 @@
   ],
   "author": "Carl Törnqvist <carl@tornqv.ist>",
   "license": "MIT",
+  "prettier": "prettier-config-standard",
+  "eslintConfig": {
+    "extends": [
+      "standard"
+    ],
+    "rules": {
+      "indent": "off",
+      "space-before-function-paren": "off",
+      "generator-star-spacing": "off",
+      "yield-star-spacing": "off"
+    }
+  },
   "devDependencies": {
     "@rollup/plugin-strip": "^2.1.0",
-    "rollup": "^2.70.2",
-    "standard": "^16.0.4",
+    "eslint": "^8.23.0",
+    "eslint-config-standard": "^17.0.0",
+    "prettier": "^2.7.1",
+    "prettier-config-standard": "^5.0.0",
+    "rollup": "^2.78.1",
     "typescript": "^4.5.4",
     "umu": "^0.0.2",
     "uvu": "^0.5.3"
+  },
+  "dependencies": {
+    "rollup-plugin-terser": "^7.0.2"
   }
 }

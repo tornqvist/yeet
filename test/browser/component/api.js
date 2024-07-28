@@ -8,22 +8,13 @@ const state = suite('state')
 const stores = suite('stores')
 const lifecycle = suite('lifecycle')
 
-component('inherits partial', function () {
-  assert.type(Component, 'function')
-  assert.ok(Object.isPrototypeOf.call(Partial.prototype, Component.prototype))
-})
-
 component('returns component object', function () {
   const fn = Component(Function.prototype)
   assert.type(fn, 'function')
   const res = fn()
-  assert.instance(res, Partial)
-  assert.instance(res, Component)
-})
-
-args('should be function', function () {
-  const Main = Component(null)
-  assert.throws(() => render(Main))
+  assert.equal(res.args, [])
+  assert.is(res.key, Function.prototype)
+  assert.is(res.init, Function.prototype)
 })
 
 args('inital arguments', function () {
@@ -32,44 +23,17 @@ args('inital arguments', function () {
     assert.type(state, 'object')
     assert.type(emit, 'function')
   })
-  render(MyComponent('test'), div)
+  render(MyComponent(), div)
 })
 
 args('are forwarded', function () {
   const div = document.createElement('div')
   const MyComponent = Component(function () {
-    return function (str) {
-      assert.is(str, 'test')
+    return function (str = 'nay') {
+      assert.is(str, 'yay')
     }
   })
-  render(MyComponent('test'), div)
-})
-
-args('can be provided on declaration', function () {
-  const div = document.createElement('div')
-  const MyComponent = Component(Main, 'world')
-  render(MyComponent, div)
-  function Main () {
-    return (name) => assert.is(name, 'world')
-  }
-})
-
-args('can be supplied when calling', function () {
-  const div = document.createElement('div')
-  const MyComponent = Component(Main)
-  render(MyComponent('world'), div)
-  function Main () {
-    return (name) => assert.is(name, 'world')
-  }
-})
-
-args('provided when called override declaration arguments', function () {
-  const div = document.createElement('div')
-  const MyComponent = Component(Main, 'world')
-  render(MyComponent('planet'), div)
-  function Main () {
-    return (name) => assert.is(name, 'planet')
-  }
+  render(MyComponent('yay'), div)
 })
 
 state('is inherited', function () {
@@ -90,17 +54,6 @@ state('is inherited', function () {
       })}
     </div>
   `, div)
-})
-
-state('is mutable', function () {
-  const initialState = {}
-  const div = document.createElement('div')
-  const MyComponent = Component(function (state, emit) {
-    assert.is(state, initialState)
-    state.test = 'test'
-  })
-  render(MyComponent('test'), div, initialState)
-  assert.is(initialState.test, 'test')
 })
 
 stores('arguments', function () {
